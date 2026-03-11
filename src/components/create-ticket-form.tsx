@@ -42,7 +42,6 @@ export function CreateTicketForm({ onSuccess }: CreateTicketFormProps) {
           title,
           description,
           priority,
-          userId: session.user.id,
         }),
       });
 

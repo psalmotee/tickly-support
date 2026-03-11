@@ -8,12 +8,87 @@ import {
   VALID_TICKET_PRIORITIES,
 } from "@/lib/ticket-rules";
 
+const TICKET_ID_PREFIX = "TCK";
+const TICKET_ID_PADDING = 4;
+const MAX_TICKET_ID_RETRIES = 5;
+
+function isDuplicateTicketIdError(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes("duplicate") ||
+    normalized.includes("already exists") ||
+    normalized.includes("unique") ||
+    normalized.includes("conflict")
+  );
+}
+
+function isUnknownFieldError(message: string): boolean {
+  return message.toLowerCase().includes("unknown field");
+}
+
+function extractUnknownFields(message: string): string[] {
+  const matches = message.match(/\b[a-zA-Z_][a-zA-Z0-9_]*\b/g);
+  if (!matches) return [];
+
+  const reserved = new Set([
+    "unknown",
+    "field",
+    "fields",
+    "present",
+    "in",
+    "data",
+    "and",
+    "or",
+  ]);
+
+  return Array.from(
+    new Set(
+      matches
+        .map((token) => token.trim())
+        .filter((token) => token.length > 0)
+        .filter((token) => !reserved.has(token.toLowerCase())),
+    ),
+  );
+}
+
+function stripUnknownFieldsFromPayload(
+  payload: Record<string, unknown>,
+  message: string,
+): Record<string, unknown> | null {
+  const fields = extractUnknownFields(message);
+  if (fields.length === 0) return null;
+
+  const nextPayload = { ...payload };
+  let removed = false;
+
+  for (const field of fields) {
+    if (field in nextPayload) {
+      delete nextPayload[field];
+      removed = true;
+    }
+  }
+
+  if (!removed) return null;
+  if (!nextPayload.title || !nextPayload.description) return null;
+
+  return nextPayload;
+}
+
 function mapTicketRecord(record: Record<string, unknown>) {
   const internalNotes =
     (record.internalNotes as string) || (record.internal_notes as string) || "";
+  const ticketId =
+    (record.ticket_id as string) ||
+    (record.ticketId as string) ||
+    (record.id as string) ||
+    (record._id as string) ||
+    "";
+  const recordId =
+    (record.id as string) || (record._id as string) || ticketId || "";
 
   return {
-    id: (record.id as string) || (record._id as string) || "",
+    id: recordId,
+    ticketId,
     title: (record.title as string) || "",
     description: (record.description as string) || "",
     priority: (record.priority as string) || "medium",
@@ -36,6 +111,95 @@ function mapTicketRecord(record: Record<string, unknown>) {
     internalNotes,
     deletedByAdmin: isTicketDeletedByAdmin(internalNotes),
   };
+}
+
+async function resolveExistingUserId(sessionUser: {
+  id: string;
+  email: string;
+}): Promise<string | null> {
+  const whereCandidates: Array<Record<string, string>> = [
+    { id: sessionUser.id },
+    { user_id: sessionUser.id },
+    { email: sessionUser.email },
+  ];
+
+  for (const where of whereCandidates) {
+    try {
+      const response = await manta.fetchAllRecords({
+        table: "tickly-auth",
+        where,
+        list: 1,
+      });
+
+      if (response.status && response.data.length > 0) {
+        const user = response.data[0] as Record<string, unknown>;
+        return (
+          (user.id as string) ||
+          (user.user_id as string) ||
+          (user.userid as string) ||
+          sessionUser.id
+        );
+      }
+    } catch (error: unknown) {
+      console.error("[tickets][POST] Failed resolving user", {
+        where,
+        error,
+      });
+    }
+  }
+
+  return null;
+}
+
+function buildReadableTicketId(sequence: number): string {
+  return `${TICKET_ID_PREFIX}-${String(sequence).padStart(
+    TICKET_ID_PADDING,
+    "0",
+  )}`;
+}
+
+async function generateReadableTicketId(ticketTable: string): Promise<string> {
+  const ticketIdPattern = new RegExp(
+    `^${TICKET_ID_PREFIX}-(\\d{${TICKET_ID_PADDING}})$`,
+  );
+
+  try {
+    const response = await manta.fetchAllRecords({
+      table: ticketTable,
+      fields: ["ticket_id"],
+      orderBy: "created_at",
+      order: "desc",
+    });
+
+    let maxSequence = 0;
+
+    if (Array.isArray(response.data)) {
+      for (const rawRecord of response.data) {
+        const record = rawRecord as Record<string, unknown>;
+        const candidateId =
+          (record.ticket_id as string) || (record.ticketId as string) || "";
+
+        const match = ticketIdPattern.exec(candidateId);
+        if (!match) continue;
+
+        const sequence = Number.parseInt(match[1], 10);
+        if (Number.isNaN(sequence)) continue;
+
+        if (sequence > maxSequence) {
+          maxSequence = sequence;
+        }
+      }
+    }
+
+    return buildReadableTicketId(maxSequence + 1);
+  } catch (error: unknown) {
+    console.error("[tickets][POST] Failed to generate readable ticket ID", {
+      error,
+    });
+
+    const fallbackSequence = Math.floor(Date.now() % 10000);
+    return buildReadableTicketId(fallbackSequence);
+  }
 }
 
 export async function GET(req: Request) {
@@ -135,30 +299,33 @@ export async function POST(req: Request) {
       );
     }
 
-    const { title, description, priority, userId } = body as {
+    const { title, description, priority } = body as {
       title?: unknown;
       description?: unknown;
       priority?: unknown;
-      userId?: unknown;
     };
+
+    const resolvedUserId = await resolveExistingUserId(sessionUser);
+    if (!resolvedUserId) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Authenticated user profile was not found",
+        },
+        { status: 400 },
+      );
+    }
 
     const validationError = validateTicketCreateInput({
       title,
       description,
       priority,
-      userId,
+      userId: resolvedUserId,
     });
     if (validationError) {
       return NextResponse.json(
         { success: false, error: validationError },
         { status: 400 },
-      );
-    }
-
-    if (sessionUser.role !== "admin" && sessionUser.id !== userId) {
-      return NextResponse.json(
-        { success: false, error: "Forbidden" },
-        { status: 403 },
       );
     }
 
@@ -169,94 +336,382 @@ export async function POST(req: Request) {
 
     const ticketTable = await resolveTicketTable();
 
-    const payloadCandidates: Array<Record<string, unknown>> = [
-      {
-        title: normalizedTitle,
-        description: normalizedDescription,
-        priority: normalizedPriority,
-        status: "open",
-        user_id: userId,
-      },
-      {
-        title: normalizedTitle,
-        description: normalizedDescription,
-        priority: normalizedPriority,
-        status: "open",
-        userId,
-      },
-      {
-        title: normalizedTitle,
-        description: normalizedDescription,
-        priority: normalizedPriority,
-        status: "open",
-        userid: userId,
-      },
-      {
-        title: normalizedTitle,
-        description: normalizedDescription,
-        priority: normalizedPriority,
-        user_id: userId,
-      },
-      {
-        title: normalizedTitle,
-        description: normalizedDescription,
-        priority: normalizedPriority,
-        userId,
-      },
-    ];
-
     let lastError = "Failed to create ticket";
+    const attemptedFieldSets = new Set<string>();
 
-    for (const payload of payloadCandidates) {
-      try {
-        const createRes = await manta.createRecords({
-          table: ticketTable,
-          data: [payload],
-        });
+    for (let retry = 0; retry < MAX_TICKET_ID_RETRIES; retry += 1) {
+      const now = new Date().toISOString();
+      const generatedTicketId = await generateReadableTicketId(ticketTable);
+      const commonFields = {
+        title: normalizedTitle,
+        description: normalizedDescription,
+        priority: normalizedPriority,
+        status: "open",
+      };
 
-        const createSucceeded =
-          Boolean((createRes as { success?: boolean }).success) ||
-          Boolean((createRes as { status?: boolean }).status) ||
-          (typeof (createRes as { message?: string }).message === "string" &&
-            (createRes as { message?: string }).message
-              ?.toLowerCase()
-              .includes("successfully processed"));
+      const payloadCandidates: Array<Record<string, unknown>> = [
+        // Preferred payload for support_tickets schema.
+        {
+          ...commonFields,
+          ticket_id: generatedTicketId,
+          user_id: resolvedUserId,
+          created_at: now,
+          updated_at: now,
+        },
+        // Some tables accept both naming styles.
+        {
+          ...commonFields,
+          ticketId: generatedTicketId,
+          user_id: resolvedUserId,
+          created_at: now,
+          updated_at: now,
+        },
+        {
+          ...commonFields,
+          ticket_id: generatedTicketId,
+          user_id: resolvedUserId,
+          created_at: now,
+          updated_at: now,
+          createdAt: now,
+          updatedAt: now,
+        },
+        {
+          ...commonFields,
+          id: generatedTicketId,
+          user_id: resolvedUserId,
+          created_at: now,
+          updated_at: now,
+        },
+        {
+          ...commonFields,
+          ticket_id: generatedTicketId,
+          user_id: resolvedUserId,
+          createdAt: now,
+          updatedAt: now,
+        },
+        {
+          ...commonFields,
+          ticketId: generatedTicketId,
+          user_id: resolvedUserId,
+          createdAt: now,
+          updatedAt: now,
+        },
+        {
+          ...commonFields,
+          id: generatedTicketId,
+          user_id: resolvedUserId,
+          createdAt: now,
+          updatedAt: now,
+        },
+        // Legacy fallback payloads.
+        {
+          ...commonFields,
+          ticket_id: generatedTicketId,
+          userId: resolvedUserId,
+          createdAt: now,
+          updatedAt: now,
+        },
+        {
+          ...commonFields,
+          ticket_id: generatedTicketId,
+          userid: resolvedUserId,
+          created_at: now,
+          updated_at: now,
+        },
+        {
+          title: normalizedTitle,
+          description: normalizedDescription,
+          ticket_id: generatedTicketId,
+          user_id: resolvedUserId,
+        },
+        {
+          title: normalizedTitle,
+          description: normalizedDescription,
+          ticketId: generatedTicketId,
+          user_id: resolvedUserId,
+        },
+        {
+          title: normalizedTitle,
+          description: normalizedDescription,
+          id: generatedTicketId,
+          user_id: resolvedUserId,
+        },
+        {
+          ...commonFields,
+          user_id: resolvedUserId,
+          created_at: now,
+          updated_at: now,
+        },
+        {
+          ...commonFields,
+          user_id: resolvedUserId,
+        },
+        {
+          ...commonFields,
+          userId: resolvedUserId,
+        },
+        {
+          title: normalizedTitle,
+          description: normalizedDescription,
+          user_id: resolvedUserId,
+        },
+      ];
 
-        if (createSucceeded) {
-          return NextResponse.json({
-            success: true,
-            ticket: mapTicketRecord(payload),
+      let shouldRetryWithNewTicketId = false;
+
+      for (const payload of payloadCandidates) {
+        attemptedFieldSets.add(Object.keys(payload).sort().join(","));
+
+        try {
+          const createRes = await manta.createRecords({
+            table: ticketTable,
+            data: [payload],
           });
-        }
 
-        lastError =
-          (createRes as { message?: string }).message ||
-          "Failed to create ticket";
-        if (!lastError.includes("Unknown field")) {
-          break;
-        }
-      } catch (candidateError: unknown) {
-        const message =
-          candidateError instanceof Error
-            ? candidateError.message
-            : "Failed to create ticket";
+          const createSucceeded =
+            Boolean((createRes as { success?: boolean }).success) ||
+            Boolean((createRes as { status?: boolean }).status) ||
+            (typeof (createRes as { message?: string }).message === "string" &&
+              (createRes as { message?: string }).message
+                ?.toLowerCase()
+                .includes("successfully processed"));
 
-        console.error("[tickets][POST] Failed with payload candidate", {
-          payload,
-          candidateError,
-        });
+          if (createSucceeded) {
+            const createData = (createRes as { data?: unknown }).data as
+              | {
+                  results?: Array<{
+                    record?: Record<string, unknown>;
+                  }>;
+                }
+              | undefined;
 
-        lastError = message;
-        if (!message.includes("Unknown field")) {
-          break;
+            const firstResultRecord = Array.isArray(createData?.results)
+              ? createData?.results[0]?.record
+              : undefined;
+
+            const createdRecord =
+              firstResultRecord && typeof firstResultRecord === "object"
+                ? firstResultRecord
+                : payload;
+
+            return NextResponse.json({
+              success: true,
+              ticketIdRetriesUsed: retry,
+              ticket: mapTicketRecord({
+                ...createdRecord,
+                ticket_id:
+                  (createdRecord.ticket_id as string) || generatedTicketId,
+                created_at: (createdRecord.created_at as string) || now,
+                updated_at: (createdRecord.updated_at as string) || now,
+              }),
+            });
+          }
+
+          lastError =
+            (createRes as { message?: string }).message ||
+            "Failed to create ticket";
+
+          if (isDuplicateTicketIdError(lastError)) {
+            shouldRetryWithNewTicketId = true;
+            break;
+          }
+
+          if (!isUnknownFieldError(lastError)) {
+            break;
+          }
+
+          const sanitizedPayload = stripUnknownFieldsFromPayload(
+            payload,
+            lastError,
+          );
+
+          if (!sanitizedPayload) {
+            continue;
+          }
+
+          attemptedFieldSets.add(
+            Object.keys(sanitizedPayload).sort().join(","),
+          );
+
+          try {
+            const sanitizedCreateRes = await manta.createRecords({
+              table: ticketTable,
+              data: [sanitizedPayload],
+            });
+
+            const sanitizedSucceeded =
+              Boolean((sanitizedCreateRes as { success?: boolean }).success) ||
+              Boolean((sanitizedCreateRes as { status?: boolean }).status) ||
+              (typeof (sanitizedCreateRes as { message?: string }).message ===
+                "string" &&
+                (sanitizedCreateRes as { message?: string }).message
+                  ?.toLowerCase()
+                  .includes("successfully processed"));
+
+            if (sanitizedSucceeded) {
+              const sanitizedData = (sanitizedCreateRes as { data?: unknown })
+                .data as
+                | {
+                    results?: Array<{
+                      record?: Record<string, unknown>;
+                    }>;
+                  }
+                | undefined;
+
+              const sanitizedRecord = Array.isArray(sanitizedData?.results)
+                ? sanitizedData?.results[0]?.record
+                : undefined;
+
+              const createdRecord =
+                sanitizedRecord && typeof sanitizedRecord === "object"
+                  ? sanitizedRecord
+                  : sanitizedPayload;
+
+              return NextResponse.json({
+                success: true,
+                ticketIdRetriesUsed: retry,
+                ticket: mapTicketRecord({
+                  ...createdRecord,
+                  ticket_id:
+                    (createdRecord.ticket_id as string) || generatedTicketId,
+                  created_at: (createdRecord.created_at as string) || now,
+                  updated_at: (createdRecord.updated_at as string) || now,
+                }),
+              });
+            }
+          } catch (sanitizedError: unknown) {
+            const sanitizedMessage =
+              sanitizedError instanceof Error
+                ? sanitizedError.message
+                : "Failed to create ticket";
+
+            lastError = sanitizedMessage;
+
+            if (isDuplicateTicketIdError(sanitizedMessage)) {
+              shouldRetryWithNewTicketId = true;
+              break;
+            }
+
+            if (!isUnknownFieldError(sanitizedMessage)) {
+              break;
+            }
+          }
+        } catch (candidateError: unknown) {
+          const message =
+            candidateError instanceof Error
+              ? candidateError.message
+              : "Failed to create ticket";
+
+          console.error("[tickets][POST] Failed with payload candidate", {
+            payload,
+            candidateError,
+          });
+
+          lastError = message;
+
+          if (isDuplicateTicketIdError(message)) {
+            shouldRetryWithNewTicketId = true;
+            break;
+          }
+
+          if (!isUnknownFieldError(message)) {
+            break;
+          }
+
+          const sanitizedPayload = stripUnknownFieldsFromPayload(
+            payload,
+            message,
+          );
+
+          if (!sanitizedPayload) {
+            continue;
+          }
+
+          attemptedFieldSets.add(
+            Object.keys(sanitizedPayload).sort().join(","),
+          );
+
+          try {
+            const sanitizedCreateRes = await manta.createRecords({
+              table: ticketTable,
+              data: [sanitizedPayload],
+            });
+
+            const sanitizedSucceeded =
+              Boolean((sanitizedCreateRes as { success?: boolean }).success) ||
+              Boolean((sanitizedCreateRes as { status?: boolean }).status) ||
+              (typeof (sanitizedCreateRes as { message?: string }).message ===
+                "string" &&
+                (sanitizedCreateRes as { message?: string }).message
+                  ?.toLowerCase()
+                  .includes("successfully processed"));
+
+            if (sanitizedSucceeded) {
+              const sanitizedData = (sanitizedCreateRes as { data?: unknown })
+                .data as
+                | {
+                    results?: Array<{
+                      record?: Record<string, unknown>;
+                    }>;
+                  }
+                | undefined;
+
+              const sanitizedRecord = Array.isArray(sanitizedData?.results)
+                ? sanitizedData?.results[0]?.record
+                : undefined;
+
+              const createdRecord =
+                sanitizedRecord && typeof sanitizedRecord === "object"
+                  ? sanitizedRecord
+                  : sanitizedPayload;
+
+              return NextResponse.json({
+                success: true,
+                ticketIdRetriesUsed: retry,
+                ticket: mapTicketRecord({
+                  ...createdRecord,
+                  ticket_id:
+                    (createdRecord.ticket_id as string) || generatedTicketId,
+                  created_at: (createdRecord.created_at as string) || now,
+                  updated_at: (createdRecord.updated_at as string) || now,
+                }),
+              });
+            }
+          } catch (sanitizedError: unknown) {
+            const sanitizedMessage =
+              sanitizedError instanceof Error
+                ? sanitizedError.message
+                : "Failed to create ticket";
+            lastError = sanitizedMessage;
+
+            if (isDuplicateTicketIdError(sanitizedMessage)) {
+              shouldRetryWithNewTicketId = true;
+              break;
+            }
+
+            if (!isUnknownFieldError(sanitizedMessage)) {
+              break;
+            }
+          }
         }
       }
+
+      if (shouldRetryWithNewTicketId) {
+        continue;
+      }
+
+      break;
     }
 
     return NextResponse.json(
       {
         success: false,
         error: lastError,
+        resolvedTable: ticketTable,
+        attemptedFieldSets: Array.from(attemptedFieldSets),
+        hint: lastError.toLowerCase().includes("unknown field")
+          ? "Schema mismatch: verify this exact table has fields id,title,description,priority,status,user_id,created_at,updated_at,internal_notes,ticket_id"
+          : undefined,
       },
       { status: 500 },
     );

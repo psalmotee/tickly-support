@@ -48,13 +48,13 @@ export function AdminDashboardHeader() {
                 Dashboard
               </Link>
               <Link
-                href="/admin-dashboard/admin-tickets-list-page"
+                href="/admin-dashboard/tickets-list"
                 className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-foreground hover:bg-secondary transition-colors"
               >
                 Tickets
               </Link>
               <Link
-                href="/admin-dashboard/users-list-page"
+                href="/admin-dashboard/users-list"
                 className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-foreground hover:bg-secondary transition-colors"
               >
                 Users
@@ -63,7 +63,7 @@ export function AdminDashboardHeader() {
 
             <div className="flex flex-col items-end">
               <p className="text-sm font-medium text-foreground">
-                {session?.user.fullName || session?.user.email}
+                {session?.user.fullName}
               </p>
               <p className="text-xs text-muted-foreground">Admin</p>
             </div>
@@ -95,13 +95,13 @@ export function AdminDashboardHeader() {
                 Dashboard
               </Link>
               <Link
-                href="/admin-dashboard/admin-tickets-list-page"
+                href="/admin-dashboard/tickets-list"
                 className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-foreground hover:bg-secondary transition-colors"
               >
                 Tickets
               </Link>
               <Link
-                href="/admin-dashboard/users-list-page"
+                href="/admin-dashboard/users-list"
                 className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-foreground hover:bg-secondary transition-colors"
               >
                 Users

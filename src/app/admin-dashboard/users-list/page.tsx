@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
 import { isAdmin } from "@/lib/access-control";
 import { AdminDashboardHeader } from "@/components/admin-dashboard-header";
+import { AdminUserList } from "@/components/admin-users-list";
 
 export default function AdminUsersPage() {
   const router = useRouter();
@@ -37,9 +38,7 @@ export default function AdminUsersPage() {
           </p>
         </div>
 
-        <div className="mb-8 mx-auto max-w-5xl justify-center items-center">
-          <p className="font-md text-3xl text-foreground">List Users</p>
-        </div>
+        <AdminUserList />
       </main>
     </div>
   );

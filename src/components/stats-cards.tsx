@@ -7,24 +7,26 @@ import { isTicketDeletedByAdmin } from "@/lib/ticket-soft-delete";
 import { useAuth } from "./auth-provider";
 import { BarChart3, CheckCircle2, Clock, AlertCircle } from "lucide-react";
 
+const EMPTY_STATS = {
+  total: 0,
+  open: 0,
+  inProgress: 0,
+  closed: 0,
+};
+
 export function StatsCards() {
   const { session } = useAuth();
-  const [stats, setStats] = useState({
-    total: 0,
-    open: 0,
-    inProgress: 0,
-    closed: 0,
-  });
+  const [stats, setStats] = useState(EMPTY_STATS);
+  const userId = session?.user?.id;
 
   useEffect(() => {
-    if (!session?.user?.id) {
-      setStats({ total: 0, open: 0, inProgress: 0, closed: 0 });
-      return;
-    }
+    if (!userId) return;
+
+    let cancelled = false;
 
     const loadStats = async () => {
       try {
-        const res = await fetch(`/api/tickets?userId=${session.user.id}`, {
+        const res = await fetch(`/api/tickets?userId=${userId}`, {
           cache: "no-store",
         });
         const data = await res.json();
@@ -37,45 +39,56 @@ export function StatsCards() {
             !isTicketDeletedByAdmin(ticket.internalNotes),
         );
 
-        setStats({
-          total: activeTickets.length,
-          open: activeTickets.filter((t: Ticket) => t.status === "open").length,
-          inProgress: activeTickets.filter(
-            (t: Ticket) => t.status === "in-progress",
-          ).length,
-          closed: activeTickets.filter((t: Ticket) => t.status === "closed")
-            .length,
-        });
+        if (!cancelled) {
+          setStats({
+            total: activeTickets.length,
+            open: activeTickets.filter((t: Ticket) => t.status === "open")
+              .length,
+            inProgress: activeTickets.filter(
+              (t: Ticket) => t.status === "in-progress",
+            ).length,
+            closed: activeTickets.filter((t: Ticket) => t.status === "closed")
+              .length,
+          });
+        }
       } catch {
-        setStats({ total: 0, open: 0, inProgress: 0, closed: 0 });
+        if (!cancelled) {
+          setStats(EMPTY_STATS);
+        }
       }
     };
 
     void loadStats();
-  }, [session?.user?.id]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  const displayStats = userId ? stats : EMPTY_STATS;
 
   const cards = [
     {
       label: "Total Tickets",
-      value: stats.total,
+      value: displayStats.total,
       icon: BarChart3,
       color: "bg-blue-500/10 text-blue-600",
     },
     {
       label: "Open",
-      value: stats.open,
+      value: displayStats.open,
       icon: AlertCircle,
       color: "bg-amber-500/10 text-amber-600",
     },
     {
       label: "In Progress",
-      value: stats.inProgress,
+      value: displayStats.inProgress,
       icon: Clock,
       color: "bg-purple-500/10 text-purple-600",
     },
     {
       label: "Closed",
-      value: stats.closed,
+      value: displayStats.closed,
       icon: CheckCircle2,
       color: "bg-green-500/10 text-green-600",
     },

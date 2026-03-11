@@ -65,6 +65,9 @@ export function TicketCard({ ticket, onEdit, onDelete }: TicketCardProps) {
           <h3 className="text-lg font-semibold text-foreground">
             {ticket.title}
           </h3>
+          <p className="text-xs text-muted-foreground mt-1">
+            Ticket ID: {ticket.ticketId || ticket.id}
+          </p>
           <p className="text-sm text-muted-foreground mt-1">
             {ticket.description}
           </p>

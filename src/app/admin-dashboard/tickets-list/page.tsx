@@ -1,21 +1,24 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
 import { isAdmin } from "@/lib/access-control";
 import { AdminDashboardHeader } from "@/components/admin-dashboard-header";
+import { AdminTicketList } from "@/components/admin-ticket-list";
 import { AdminStats } from "@/components/admin-stats";
 
 export default function AdminTicketsPage() {
   const router = useRouter();
   const { session, loading } = useAuth();
-  const stats = {
+  const [stats, setStats] = useState({
     total: 0,
     open: 0,
     inProgress: 0,
     closed: 0,
-  };
+  });
 
+  // Redirect if not admin
   if (!loading && (!session || !isAdmin(session))) {
     router.push("/user-dashboard");
     return null;
@@ -45,9 +48,8 @@ export default function AdminTicketsPage() {
         <div className="mb-8">
           <AdminStats {...stats} />
         </div>
-        <div className="mb-8 mx-auto justify-center items-center">
-          <p className="font-md text-3xl text-foreground">List Tickets</p>
-        </div>
+
+        <AdminTicketList onStatsChange={setStats} />
       </main>
     </div>
   );

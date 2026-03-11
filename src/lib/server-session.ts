@@ -7,11 +7,14 @@ interface TokenPayload {
   userId?: string;
   email?: string;
   role?: string;
+  fullName?: string;
+  name?: string;
 }
 
 export interface ApiSessionUser {
   id: string;
   email: string;
+  fullName: string;
   role: "admin" | "user";
 }
 
@@ -64,9 +67,20 @@ export async function getRequestSessionUser(): Promise<ApiSessionUser | null> {
       payload?.sub ||
       email;
 
+    const fullName =
+      userProfile?.fullName ||
+      userProfile?.fullname ||
+      (userProfile?.first_name
+        ? `${String(userProfile.first_name)} ${String(userProfile.last_name || "")}`.trim()
+        : undefined) ||
+      payload?.fullName ||
+      payload?.name ||
+      email;
+
     return {
       id: userId,
       email,
+      fullName,
       role: normalizeRole(
         userProfile?.role ||
           userProfile?.userRole ||
