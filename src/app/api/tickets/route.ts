@@ -113,6 +113,218 @@ function mapTicketRecord(record: Record<string, unknown>) {
   };
 }
 
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function getCreatedTimestampFromRecord(
+  record: Record<string, unknown>,
+): string {
+  const createdAtCandidates = [record.created_at, record.createdAt];
+  for (const candidate of createdAtCandidates) {
+    if (isNonEmptyString(candidate)) {
+      return candidate;
+    }
+  }
+
+  return "";
+}
+
+async function ensureCreatedTimestampPersisted(params: {
+  ticketTable: string;
+  createdRecord: Record<string, unknown>;
+  generatedTicketId: string;
+  resolvedUserId: string;
+  now: string;
+  normalizedTitle: string;
+  normalizedDescription: string;
+  /**
+   * True when createdRecord came directly from Manta's API response.
+   * False when it is the local payload object we sent (no guarantee the
+   * DB stored every field we included, e.g. created_at may be silently dropped).
+   */
+  fromApiResponse: boolean;
+}): Promise<Record<string, unknown>> {
+  const {
+    ticketTable,
+    createdRecord,
+    generatedTicketId,
+    resolvedUserId,
+    now,
+    normalizedTitle,
+    normalizedDescription,
+    fromApiResponse,
+  } = params;
+
+  // Only trust the early-exit when Manta itself returned the record AND
+  // confirmed created_at is stored. When createdRecord is our own payload
+  // fallback, created_at is present in memory but may not be in the DB.
+  if (fromApiResponse && getCreatedTimestampFromRecord(createdRecord)) {
+    return createdRecord;
+  }
+
+  const whereCandidates: Array<Record<string, unknown>> = [];
+  const whereKeySet = new Set<string>();
+
+  const pushWhereCandidate = (where: Record<string, unknown>) => {
+    const key = JSON.stringify(where);
+    if (!whereKeySet.has(key)) {
+      whereKeySet.add(key);
+      whereCandidates.push(where);
+    }
+  };
+
+  if (isNonEmptyString(createdRecord.id)) {
+    pushWhereCandidate({ id: createdRecord.id });
+  }
+
+  if (isNonEmptyString(createdRecord._id)) {
+    pushWhereCandidate({ _id: createdRecord._id });
+  }
+
+  if (isNonEmptyString(createdRecord.ticket_id)) {
+    pushWhereCandidate({ ticket_id: createdRecord.ticket_id });
+  }
+
+  if (isNonEmptyString(createdRecord.ticketId)) {
+    pushWhereCandidate({ ticketId: createdRecord.ticketId });
+  }
+
+  pushWhereCandidate({ ticket_id: generatedTicketId });
+  pushWhereCandidate({ ticketId: generatedTicketId });
+
+  if (isNonEmptyString(createdRecord.user_id)) {
+    pushWhereCandidate({
+      user_id: createdRecord.user_id,
+      ticket_id: generatedTicketId,
+    });
+  }
+
+  pushWhereCandidate({ user_id: resolvedUserId, ticket_id: generatedTicketId });
+
+  const updateCandidates: Array<Record<string, unknown>> = [
+    { created_at: now, ticket_id: generatedTicketId },
+    { createdAt: now, ticketId: generatedTicketId },
+    {
+      created_at: now,
+      createdAt: now,
+      ticket_id: generatedTicketId,
+      ticketId: generatedTicketId,
+    },
+    { created_at: now },
+    { createdAt: now },
+  ];
+
+  const applyBackfillByWhere = async (
+    where: Record<string, unknown>,
+  ): Promise<Record<string, unknown> | null> => {
+    for (const data of updateCandidates) {
+      try {
+        const response = await manta.updateRecords({
+          table: ticketTable,
+          where,
+          data,
+        });
+
+        if (response.status) {
+          return {
+            ...createdRecord,
+            ...data,
+          };
+        }
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : "";
+
+        if (!isUnknownFieldError(message)) {
+          continue;
+        }
+      }
+    }
+
+    return null;
+  };
+
+  for (const where of whereCandidates) {
+    const updatedRecord = await applyBackfillByWhere(where);
+    if (updatedRecord) {
+      return updatedRecord;
+    }
+  }
+
+  // Some create responses don't include row IDs; locate the newly created row
+  // using user + content signals, then backfill created_at/ticket_id on that row.
+  const userWhereCandidates: Array<Record<string, unknown>> = [
+    { user_id: resolvedUserId },
+    { userId: resolvedUserId },
+    { userid: resolvedUserId },
+  ];
+
+  for (const userWhere of userWhereCandidates) {
+    try {
+      const lookup = await manta.fetchAllRecords({
+        table: ticketTable,
+        where: userWhere,
+        list: 20,
+      });
+
+      if (
+        !lookup.status ||
+        !Array.isArray(lookup.data) ||
+        lookup.data.length === 0
+      ) {
+        continue;
+      }
+
+      const matched = lookup.data.find((raw) => {
+        const row = raw as Record<string, unknown>;
+        const rowTitle = typeof row.title === "string" ? row.title.trim() : "";
+        const rowDescription =
+          typeof row.description === "string" ? row.description.trim() : "";
+        return (
+          rowTitle === normalizedTitle &&
+          rowDescription === normalizedDescription
+        );
+      }) as Record<string, unknown> | undefined;
+
+      if (!matched) {
+        continue;
+      }
+
+      const rowWhereCandidates: Array<Record<string, unknown>> = [];
+      if (isNonEmptyString(matched.id)) {
+        rowWhereCandidates.push({ id: matched.id });
+      }
+      if (isNonEmptyString(matched._id)) {
+        rowWhereCandidates.push({ _id: matched._id });
+      }
+      if (isNonEmptyString(matched.ticket_id)) {
+        rowWhereCandidates.push({ ticket_id: matched.ticket_id });
+      }
+
+      for (const rowWhere of rowWhereCandidates) {
+        const updatedRecord = await applyBackfillByWhere(rowWhere);
+        if (updatedRecord) {
+          return {
+            ...matched,
+            ...updatedRecord,
+          };
+        }
+      }
+    } catch (lookupError: unknown) {
+      console.error("[tickets][POST] Failed lookup backfill for created_at", {
+        userWhere,
+        lookupError,
+      });
+    }
+  }
+
+  // Preserve API consistency even when table schema blocks created-at persistence.
+  return {
+    ...createdRecord,
+    created_at: now,
+  };
+}
+
 async function resolveExistingUserId(sessionUser: {
   id: string;
   email: string;
@@ -489,20 +701,41 @@ export async function POST(req: Request) {
               ? createData?.results[0]?.record
               : undefined;
 
-            const createdRecord =
-              firstResultRecord && typeof firstResultRecord === "object"
-                ? firstResultRecord
-                : payload;
+            const fromApiResponse = Boolean(
+              firstResultRecord && typeof firstResultRecord === "object",
+            );
+            const createdRecord = fromApiResponse
+              ? (firstResultRecord as Record<string, unknown>)
+              : payload;
+
+            const recordWithCreatedTimestamp =
+              await ensureCreatedTimestampPersisted({
+                ticketTable,
+                createdRecord,
+                generatedTicketId,
+                resolvedUserId,
+                now,
+                normalizedTitle,
+                normalizedDescription,
+                fromApiResponse,
+              });
 
             return NextResponse.json({
               success: true,
               ticketIdRetriesUsed: retry,
               ticket: mapTicketRecord({
-                ...createdRecord,
+                ...recordWithCreatedTimestamp,
                 ticket_id:
-                  (createdRecord.ticket_id as string) || generatedTicketId,
-                created_at: (createdRecord.created_at as string) || now,
-                updated_at: (createdRecord.updated_at as string) || now,
+                  (recordWithCreatedTimestamp.ticket_id as string) ||
+                  generatedTicketId,
+                created_at:
+                  (recordWithCreatedTimestamp.created_at as string) ||
+                  (recordWithCreatedTimestamp.createdAt as string) ||
+                  now,
+                updated_at:
+                  (recordWithCreatedTimestamp.updated_at as string) ||
+                  (recordWithCreatedTimestamp.updatedAt as string) ||
+                  now,
               }),
             });
           }
@@ -562,20 +795,41 @@ export async function POST(req: Request) {
                 ? sanitizedData?.results[0]?.record
                 : undefined;
 
-              const createdRecord =
-                sanitizedRecord && typeof sanitizedRecord === "object"
-                  ? sanitizedRecord
-                  : sanitizedPayload;
+              const sanitizedFromApiResponse = Boolean(
+                sanitizedRecord && typeof sanitizedRecord === "object",
+              );
+              const createdRecord = sanitizedFromApiResponse
+                ? (sanitizedRecord as Record<string, unknown>)
+                : sanitizedPayload;
+
+              const recordWithCreatedTimestamp =
+                await ensureCreatedTimestampPersisted({
+                  ticketTable,
+                  createdRecord,
+                  generatedTicketId,
+                  resolvedUserId,
+                  now,
+                  normalizedTitle,
+                  normalizedDescription,
+                  fromApiResponse: sanitizedFromApiResponse,
+                });
 
               return NextResponse.json({
                 success: true,
                 ticketIdRetriesUsed: retry,
                 ticket: mapTicketRecord({
-                  ...createdRecord,
+                  ...recordWithCreatedTimestamp,
                   ticket_id:
-                    (createdRecord.ticket_id as string) || generatedTicketId,
-                  created_at: (createdRecord.created_at as string) || now,
-                  updated_at: (createdRecord.updated_at as string) || now,
+                    (recordWithCreatedTimestamp.ticket_id as string) ||
+                    generatedTicketId,
+                  created_at:
+                    (recordWithCreatedTimestamp.created_at as string) ||
+                    (recordWithCreatedTimestamp.createdAt as string) ||
+                    now,
+                  updated_at:
+                    (recordWithCreatedTimestamp.updated_at as string) ||
+                    (recordWithCreatedTimestamp.updatedAt as string) ||
+                    now,
                 }),
               });
             }
@@ -660,20 +914,41 @@ export async function POST(req: Request) {
                 ? sanitizedData?.results[0]?.record
                 : undefined;
 
-              const createdRecord =
-                sanitizedRecord && typeof sanitizedRecord === "object"
-                  ? sanitizedRecord
-                  : sanitizedPayload;
+              const throwSanitizedFromApiResponse = Boolean(
+                sanitizedRecord && typeof sanitizedRecord === "object",
+              );
+              const createdRecord = throwSanitizedFromApiResponse
+                ? (sanitizedRecord as Record<string, unknown>)
+                : sanitizedPayload;
+
+              const recordWithCreatedTimestamp =
+                await ensureCreatedTimestampPersisted({
+                  ticketTable,
+                  createdRecord,
+                  generatedTicketId,
+                  resolvedUserId,
+                  now,
+                  normalizedTitle,
+                  normalizedDescription,
+                  fromApiResponse: throwSanitizedFromApiResponse,
+                });
 
               return NextResponse.json({
                 success: true,
                 ticketIdRetriesUsed: retry,
                 ticket: mapTicketRecord({
-                  ...createdRecord,
+                  ...recordWithCreatedTimestamp,
                   ticket_id:
-                    (createdRecord.ticket_id as string) || generatedTicketId,
-                  created_at: (createdRecord.created_at as string) || now,
-                  updated_at: (createdRecord.updated_at as string) || now,
+                    (recordWithCreatedTimestamp.ticket_id as string) ||
+                    generatedTicketId,
+                  created_at:
+                    (recordWithCreatedTimestamp.created_at as string) ||
+                    (recordWithCreatedTimestamp.createdAt as string) ||
+                    now,
+                  updated_at:
+                    (recordWithCreatedTimestamp.updated_at as string) ||
+                    (recordWithCreatedTimestamp.updatedAt as string) ||
+                    now,
                 }),
               });
             }

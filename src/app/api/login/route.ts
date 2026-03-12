@@ -12,6 +12,19 @@ function normalizeRole(role?: string): "admin" | "user" {
   return "user";
 }
 
+function encodeSessionCookie(session: {
+  id: string;
+  email: string;
+  fullName: string;
+  role: "admin" | "user";
+}): string {
+  try {
+    return Buffer.from(JSON.stringify(session), "utf-8").toString("base64url");
+  } catch {
+    return "";
+  }
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch((parseError: unknown) => {
@@ -128,6 +141,23 @@ export async function POST(req: Request) {
       path: "/",
       maxAge: 60 * 60 * 24 * 7,
     });
+
+    const sessionCookieValue = encodeSessionCookie({
+      id: userId,
+      email,
+      fullName,
+      role: userRole,
+    });
+
+    if (sessionCookieValue) {
+      response.cookies.set("session_user", sessionCookieValue, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        path: "/",
+        maxAge: 60 * 60 * 24 * 7,
+      });
+    }
 
     return response;
   } catch (error: unknown) {

@@ -9,5 +9,11 @@ export function POST() {
     path: "/",
   });
 
+  response.cookies.set("session_user", "", {
+    httpOnly: true,
+    expires: new Date(0),
+    path: "/",
+  });
+
   return response;
 }

@@ -11,6 +11,13 @@ interface TokenPayload {
   name?: string;
 }
 
+interface SessionCookiePayload {
+  id?: string;
+  email?: string;
+  fullName?: string;
+  role?: string;
+}
+
 export interface ApiSessionUser {
   id: string;
   email: string;
@@ -41,13 +48,29 @@ function decodeJwtPayload(token: string): TokenPayload | null {
   }
 }
 
+function decodeSessionCookie(value: string): SessionCookiePayload | null {
+  try {
+    const json = Buffer.from(value, "base64url").toString("utf-8");
+    return JSON.parse(json) as SessionCookiePayload;
+  } catch {
+    return null;
+  }
+}
+
 export async function getRequestSessionUser(): Promise<ApiSessionUser | null> {
   try {
-    const token = (await cookies()).get("token")?.value;
+    const cookieStore = await cookies();
+    const token = cookieStore.get("token")?.value;
+    const sessionCookieRaw = cookieStore.get("session_user")?.value;
+    const sessionCookie =
+      typeof sessionCookieRaw === "string" && sessionCookieRaw
+        ? decodeSessionCookie(sessionCookieRaw)
+        : null;
+
     if (!token) return null;
 
     const payload = decodeJwtPayload(token);
-    const email = payload?.email;
+    const email = payload?.email || sessionCookie?.email;
     if (!email) return null;
 
     const response = await manta.fetchAllRecords({
@@ -62,6 +85,7 @@ export async function getRequestSessionUser(): Promise<ApiSessionUser | null> {
     const userId =
       userProfile?.id ||
       userProfile?.user_id ||
+      sessionCookie?.id ||
       payload?.id ||
       payload?.userId ||
       payload?.sub ||
@@ -73,6 +97,7 @@ export async function getRequestSessionUser(): Promise<ApiSessionUser | null> {
       (userProfile?.first_name
         ? `${String(userProfile.first_name)} ${String(userProfile.last_name || "")}`.trim()
         : undefined) ||
+      sessionCookie?.fullName ||
       payload?.fullName ||
       payload?.name ||
       email;
@@ -85,6 +110,7 @@ export async function getRequestSessionUser(): Promise<ApiSessionUser | null> {
         userProfile?.role ||
           userProfile?.userRole ||
           userProfile?.user_role ||
+          sessionCookie?.role ||
           payload?.role,
       ),
     };
