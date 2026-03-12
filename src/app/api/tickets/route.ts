@@ -3,6 +3,7 @@ import { manta } from "@/lib/manta-client";
 import { resolveTicketTable } from "@/lib/ticket-table-resolver";
 import { isTicketDeletedByAdmin } from "@/lib/ticket-soft-delete";
 import { getRequestSessionUser } from "@/lib/server-session";
+import { resolvePublicTicketNumber } from "@/lib/ticket-number";
 import {
   validateTicketCreateInput,
   VALID_TICKET_PRIORITIES,
@@ -77,14 +78,8 @@ function stripUnknownFieldsFromPayload(
 function mapTicketRecord(record: Record<string, unknown>) {
   const internalNotes =
     (record.internalNotes as string) || (record.internal_notes as string) || "";
-  const ticketId =
-    (record.ticket_id as string) ||
-    (record.ticketId as string) ||
-    (record.id as string) ||
-    (record._id as string) ||
-    "";
-  const recordId =
-    (record.id as string) || (record._id as string) || ticketId || "";
+  const recordId = (record.id as string) || (record._id as string) || "";
+  const ticketId = resolvePublicTicketNumber(record);
 
   return {
     id: recordId,
@@ -209,6 +204,8 @@ async function ensureCreatedTimestampPersisted(params: {
       ticket_id: generatedTicketId,
       ticketId: generatedTicketId,
     },
+    { ticket_id: generatedTicketId },
+    { ticketId: generatedTicketId },
     { created_at: now },
     { createdAt: now },
   ];

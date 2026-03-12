@@ -4,6 +4,7 @@ import { manta } from "@/lib/manta-client";
 import { resolveTicketTable } from "@/lib/ticket-table-resolver";
 import { markTicketDeletedByAdmin } from "@/lib/ticket-soft-delete";
 import { getRequestSessionUser } from "@/lib/server-session";
+import { resolvePublicTicketNumber } from "@/lib/ticket-number";
 import {
   canTransitionStatus,
   normalizeIncomingStatus,
@@ -68,11 +69,7 @@ export async function GET(
       undefined;
 
     ticket.userId = ticketUserId;
-    ticket.ticketId =
-      (ticket.ticket_id as string) ||
-      (ticket.ticketId as string) ||
-      (ticket.id as string) ||
-      ticketId;
+    ticket.ticketId = resolvePublicTicketNumber(ticket);
     ticket.createdAt =
       (ticket.createdAt as string) || (ticket.created_at as string) || "";
     ticket.updatedAt =

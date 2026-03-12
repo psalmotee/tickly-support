@@ -3,18 +3,14 @@ import type { NextRequest } from "next/server";
 import { manta } from "@/lib/manta-client";
 import { resolveTicketTable } from "@/lib/ticket-table-resolver";
 import { getRequestSessionUser } from "@/lib/server-session";
+import { resolvePublicTicketNumber } from "@/lib/ticket-number";
 import {
   normalizeIncomingStatus,
   VALID_TICKET_PRIORITIES,
 } from "@/lib/ticket-rules";
 
 function mapTicketRecord(record: Record<string, unknown>) {
-  const ticketId =
-    (record.ticket_id as string) ||
-    (record.ticketId as string) ||
-    (record.id as string) ||
-    (record._id as string) ||
-    "";
+  const ticketId = resolvePublicTicketNumber(record);
 
   return {
     id: (record.id as string) || (record._id as string) || ticketId,

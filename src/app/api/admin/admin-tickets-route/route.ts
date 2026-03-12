@@ -3,18 +3,13 @@ import { manta } from "@/lib/manta-client";
 import { resolveTicketTable } from "@/lib/ticket-table-resolver";
 import { isTicketDeletedByAdmin } from "@/lib/ticket-soft-delete";
 import { getRequestSessionUser } from "@/lib/server-session";
+import { resolvePublicTicketNumber } from "@/lib/ticket-number";
 
 function mapTicketRecord(record: Record<string, unknown>) {
   const internalNotes =
     (record.internalNotes as string) || (record.internal_notes as string) || "";
-  const ticketId =
-    (record.ticket_id as string) ||
-    (record.ticketId as string) ||
-    (record.id as string) ||
-    (record._id as string) ||
-    "";
-  const recordId =
-    (record.id as string) || (record._id as string) || ticketId || "";
+  const recordId = (record.id as string) || (record._id as string) || "";
+  const ticketId = resolvePublicTicketNumber(record);
 
   return {
     id: recordId,
@@ -63,17 +58,6 @@ export async function GET() {
 
     const response = await manta.fetchAllRecords({
       table: ticketTable,
-      fields: [
-        "id",
-        "title",
-        "description",
-        "status",
-        "priority",
-        "created_at",
-        "user_id",
-        "updated_at",
-        "internal_notes",
-      ],
       orderBy: "created_at",
       order: "desc",
     });
