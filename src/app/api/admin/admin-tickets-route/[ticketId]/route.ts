@@ -74,9 +74,7 @@ export async function GET(
       (ticket.id as string) ||
       ticketId;
     ticket.createdAt =
-      (ticket.createdAt as string) ||
-      (ticket.created_at as string) ||
-      new Date().toISOString();
+      (ticket.createdAt as string) || (ticket.created_at as string) || "";
     ticket.updatedAt =
       (ticket.updatedAt as string) ||
       (ticket.updated_at as string) ||

@@ -12,6 +12,13 @@ interface TicketCardProps {
 export function TicketCard({ ticket, onEdit, onDelete }: TicketCardProps) {
   const isDeletedByAdmin = Boolean(ticket.deletedByAdmin);
 
+  const formatCreatedDate = (isoValue?: string) => {
+    if (!isoValue) return "Not set";
+    const parsed = new Date(isoValue);
+    if (Number.isNaN(parsed.getTime())) return "Invalid date";
+    return parsed.toLocaleDateString();
+  };
+
   const statusColors = {
     open: "bg-amber-500/10 text-amber-700 border-amber-200",
     "in-progress": "bg-blue-500/10 text-blue-700 border-blue-200",
@@ -101,7 +108,7 @@ export function TicketCard({ ticket, onEdit, onDelete }: TicketCardProps) {
           Priority
         </span>
         <span className="text-xs text-muted-foreground ml-auto">
-          {new Date(ticket.createdAt).toLocaleDateString()}
+          {formatCreatedDate(ticket.createdAt)}
         </span>
       </div>
     </div>

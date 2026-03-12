@@ -29,15 +29,13 @@ function mapTicketRecord(record: Record<string, unknown>) {
       (record.userid as string) ||
       "",
     createdAt:
-      (record.createdAt as string) ||
-      (record.created_at as string) ||
-      new Date().toISOString(),
+      (record.createdAt as string) || (record.created_at as string) || "",
     updatedAt:
       (record.updatedAt as string) ||
       (record.updated_at as string) ||
       (record.createdAt as string) ||
       (record.created_at as string) ||
-      new Date().toISOString(),
+      "",
     internalNotes,
     deletedByAdmin: isTicketDeletedByAdmin(internalNotes),
     user: (record.user as Record<string, unknown> | undefined) || null,
@@ -86,12 +84,8 @@ export async function GET() {
         )
       : [];
 
-    const sortedTickets = mappedTickets.sort((a, b) => {
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    });
-
     const userIds = Array.from(
-      new Set(sortedTickets.map((ticket) => ticket.userId).filter(Boolean)),
+      new Set(mappedTickets.map((ticket) => ticket.userId).filter(Boolean)),
     );
 
     const usersById = new Map<string, { fullName: string; email: string }>();
@@ -149,7 +143,7 @@ export async function GET() {
 
     return NextResponse.json({
       success: true,
-      tickets: sortedTickets.map((ticket) => ({
+      tickets: mappedTickets.map((ticket) => ({
         ...ticket,
         user: usersById.get(ticket.userId) || null,
       })),

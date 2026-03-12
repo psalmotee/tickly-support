@@ -32,6 +32,13 @@ export function AdminTicketList({ onStatsChange }: AdminTicketListProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
+  const formatCreatedDate = (isoValue?: string) => {
+    if (!isoValue) return "Not set";
+    const parsed = new Date(isoValue);
+    if (Number.isNaN(parsed.getTime())) return "Invalid date";
+    return parsed.toLocaleDateString();
+  };
+
   const loadTickets = useCallback(async () => {
     try {
       const res = await fetch("/api/admin/admin-tickets-route");
@@ -288,7 +295,7 @@ export function AdminTicketList({ onStatsChange }: AdminTicketListProps) {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-sm text-muted-foreground">
-                      {new Date(ticket.createdAt).toLocaleDateString()}
+                      {formatCreatedDate(ticket.createdAt)}
                     </td>
                     <td className="px-6 py-4 text-right">
                       <button

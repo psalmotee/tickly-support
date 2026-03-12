@@ -99,15 +99,13 @@ function mapTicketRecord(record: Record<string, unknown>) {
       (record.userid as string) ||
       "",
     createdAt:
-      (record.createdAt as string) ||
-      (record.created_at as string) ||
-      new Date().toISOString(),
+      (record.createdAt as string) || (record.created_at as string) || "",
     updatedAt:
       (record.updatedAt as string) ||
       (record.updated_at as string) ||
       (record.createdAt as string) ||
       (record.created_at as string) ||
-      new Date().toISOString(),
+      "",
     internalNotes,
     deletedByAdmin: isTicketDeletedByAdmin(internalNotes),
   };
