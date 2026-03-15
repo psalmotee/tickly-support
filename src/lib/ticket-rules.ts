@@ -5,7 +5,8 @@ export type ValidTicketPriority = (typeof VALID_TICKET_PRIORITIES)[number];
 export type ValidTicketStatus = (typeof VALID_TICKET_STATUSES)[number];
 
 const STATUS_TRANSITIONS: Record<ValidTicketStatus, ValidTicketStatus[]> = {
-  open: ["in-progress"],
+  // Admins may resolve directly without passing through in-progress.
+  open: ["in-progress", "closed"],
   "in-progress": ["closed"],
   closed: [],
 };
@@ -29,6 +30,12 @@ export function canTransitionStatus(
 ): boolean {
   if (currentStatus === nextStatus) return true;
   return STATUS_TRANSITIONS[currentStatus].includes(nextStatus);
+}
+
+export function allowedTransitions(
+  currentStatus: ValidTicketStatus,
+): ValidTicketStatus[] {
+  return STATUS_TRANSITIONS[currentStatus];
 }
 
 export function validateTicketCreateInput(input: {

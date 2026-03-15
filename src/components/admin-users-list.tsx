@@ -70,11 +70,10 @@ export function AdminUserList() {
     fetchUsers(1, "");
   }, []);
 
-  
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
-      fetchUsers(1, searchQuery); 
-    }, 400); 
+      fetchUsers(1, searchQuery);
+    }, 400);
     return () => clearTimeout(delayDebounceFn);
   }, [searchQuery]);
 
@@ -83,14 +82,11 @@ export function AdminUserList() {
 
     setUpdatingId(userId);
     try {
-      const res = await fetch(
-        "/api/admin/admin-users-route/update-role-route",
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ userId, newRole }),
-        },
-      );
+      const res = await fetch("/api/admin/admin-users-route/update-role", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, newRole }),
+      });
 
       if (handleAdminApiAuthRedirect(res)) return;
 
@@ -102,7 +98,7 @@ export function AdminUserList() {
         );
         toast.success(`User is now an ${newRole}`);
       } else {
-        toast.error(data.error);
+        toast.error(data.error || "Failed to update role");
       }
     } catch {
       toast.error("Failed to update role");

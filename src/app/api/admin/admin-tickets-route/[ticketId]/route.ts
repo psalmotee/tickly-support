@@ -6,6 +6,7 @@ import { markTicketDeletedByAdmin } from "@/lib/ticket-soft-delete";
 import { getRequestSessionUser } from "@/lib/server-session";
 import { resolvePublicTicketNumber } from "@/lib/ticket-number";
 import {
+  allowedTransitions,
   canTransitionStatus,
   normalizeIncomingStatus,
 } from "@/lib/ticket-rules";
@@ -207,7 +208,21 @@ export async function PATCH(
     }
 
     const { ticketId } = await context.params;
-    const { status, softDelete } = (await req.json()) as {
+    const body = await req.json().catch((parseError: unknown) => {
+      console.error("[admin-tickets][PATCH] Invalid JSON body", {
+        parseError,
+      });
+      return null;
+    });
+
+    if (!body || typeof body !== "object") {
+      return NextResponse.json(
+        { success: false, error: "Invalid request body. Expected JSON." },
+        { status: 400 },
+      );
+    }
+
+    const { status, softDelete } = body as {
       status?: "open" | "in-progress" | "closed";
       softDelete?: boolean;
     };
@@ -261,10 +276,11 @@ export async function PATCH(
       normalizedRequestedStatus &&
       !canTransitionStatus(currentStatus, normalizedRequestedStatus)
     ) {
+      const allowed = allowedTransitions(currentStatus);
       return NextResponse.json(
         {
           success: false,
-          error: `Invalid status transition: ${currentStatus} -> ${normalizedRequestedStatus}`,
+          error: `Invalid status transition: ${currentStatus} -> ${normalizedRequestedStatus}. Allowed next statuses: ${allowed.join(", ") || "none"}`,
         },
         { status: 400 },
       );

@@ -19,11 +19,35 @@ export async function PATCH(req: Request) {
       );
     }
 
-    const { userId, newRole } = await req.json();
+    const body = await req.json().catch((parseError: unknown) => {
+      console.error("[admin-users][update-role] Invalid JSON body", {
+        parseError,
+      });
+      return null;
+    });
 
-    if (!userId || (newRole !== "admin" && newRole !== "user")) {
+    if (!body || typeof body !== "object") {
       return NextResponse.json(
-        { success: false, error: "Invalid payload" },
+        { success: false, error: "Invalid request body. Expected JSON." },
+        { status: 400 },
+      );
+    }
+
+    const { userId, newRole } = body as {
+      userId?: unknown;
+      newRole?: unknown;
+    };
+
+    if (
+      typeof userId !== "string" ||
+      !userId.trim() ||
+      (newRole !== "admin" && newRole !== "user")
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Invalid payload. 'userId' and 'newRole' are required.",
+        },
         { status: 400 },
       );
     }
@@ -38,15 +62,63 @@ export async function PATCH(req: Request) {
       );
     }
 
-    const updateResponse = await manta.updateRecords({
-      table: "tickly-auth",
-      where: { id: userId },
-      data: { role: newRole },
-    });
+    const trimmedUserId = userId.trim();
+    const whereCandidates: Array<Record<string, string>> = [
+      { id: trimmedUserId },
+      { user_id: trimmedUserId },
+      { _id: trimmedUserId },
+    ];
 
-    if (!updateResponse.status) {
+    const dataCandidates: Array<Record<string, string>> = [
+      { role: newRole },
+      { user_role: newRole },
+      { userRole: newRole },
+    ];
+
+    let updated = false;
+    let lastError = "Failed to update role";
+
+    for (const where of whereCandidates) {
+      for (const data of dataCandidates) {
+        try {
+          const updateResponse = await manta.updateRecords({
+            table: "tickly-auth",
+            where,
+            data,
+          });
+
+          if (updateResponse.status) {
+            updated = true;
+            break;
+          }
+
+          lastError =
+            (updateResponse as { message?: string }).message || lastError;
+        } catch (error: unknown) {
+          const message =
+            error instanceof Error ? error.message : "Failed to update role";
+          lastError = message;
+
+          // Continue trying fallbacks for schema/field differences.
+          if (!message.toLowerCase().includes("unknown field")) {
+            continue;
+          }
+        }
+      }
+
+      if (updated) {
+        break;
+      }
+    }
+
+    if (!updated) {
       return NextResponse.json(
-        { success: false, error: "Failed to update role" },
+        {
+          success: false,
+          error:
+            lastError ||
+            "Failed to update role. Verify tickly-auth table ID and role column names.",
+        },
         { status: 500 },
       );
     }
@@ -55,6 +127,9 @@ export async function PATCH(req: Request) {
   } catch (error: unknown) {
     const message =
       error instanceof Error ? error.message : "Failed to update role";
+    console.error("[admin-users][update-role] Failed to update role", {
+      error,
+    });
     return NextResponse.json(
       { success: false, error: message },
       { status: 500 },
