@@ -1,4 +1,4 @@
-# Ticket Management System (Next.js)
+# Ticket Management System
 
 ## Project Description
 
@@ -145,12 +145,11 @@ Notes:
 
 ## Screenshots or Demo
 
-Add screenshots or a demo link here.
-
-- Landing page: `docs/landing-page.png`
-- User dashboard: `docs/user-dashboard.png`
-- Admin dashboard: `docs/admin-dashboard.png`
-- Demo video: `https://tickyapp.netlify.app/`
+- [Landing page](docs/landing-page.png)
+- [User dashboard][](docs/user-dashboard.png)
+- [Admin dashboard][](docs/admin-dashboard.png)
+- [Demo video](https://tickyapp.netlify.app/)
+- [Live URL](https://tickyapp.netlify.app/)
 
 ## Future Improvements
 
@@ -164,4 +163,4 @@ Add screenshots or a demo link here.
 ## Author
 
 - Name: PsalmoTee
-- GitHub: `https://github.com/psalmotee`
+- [GitHub](https://github.com/psalmotee)
