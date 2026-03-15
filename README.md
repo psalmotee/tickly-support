@@ -1,193 +1,167 @@
-# TicketFlow - Next.js Ticket Management System
+# Ticket Management System (Next.js)
 
-A modern, full-featured ticket management application built with Next.js, React, and TypeScript. Manage tickets efficiently with real-time updates, status tracking, and team collaboration features.
+## Project Description
+
+This project is a full-stack Ticket Management System built with Next.js.
+
+It helps teams manage support requests in one place. Users can sign up, log in, create tickets, and track their ticket statuses. Administrators can view all tickets, review users, and manage ticket workflows from an admin dashboard.
+
+The problem it solves:
+
+- Support requests are often scattered across chat, emails, and calls.
+- Tracking ownership and status becomes difficult.
+- This system provides a structured, trackable workflow for support tickets.
 
 ## Features
 
-- **User Authentication**: Secure login and signup with localStorage-based sessions
-- **Dashboard**: Real-time statistics showing ticket counts by status
-- **Ticket Management**: Full CRUD operations for tickets
-- **Status Tracking**: Color-coded ticket statuses (Open, In Progress, Closed)
-- **Priority Levels**: Organize tickets by priority (Low, Medium, High)
-- **Form Validation**: Comprehensive client-side validation with detailed error messages
-- **Responsive Design**: Mobile-friendly interface that works on all devices
-- **Protected Routes**: Automatic redirection for unauthenticated users
+- User authentication (signup and login)
+- Ticket creation and tracking
+- Admin dashboard for ticket and user management
+- Role-based access control (user/admin)
+- Ticket sorting from newest to oldest
+- Ticket ID tracking for reference and support workflow
+- API-based data handling with Next.js route handlers
 
 ## Tech Stack
 
-- **Framework**: Next.js 16 (App Router)
-- **Language**: TypeScript
-- **Styling**: Tailwind CSS v4
-- **UI Components**: shadcn/ui
-- **Icons**: Lucide React
-- **State Management**: React Hooks + localStorage
-- **Validation**: Custom validation utilities
+- Next.js (App Router)
+- React
+- TypeScript
+- Tailwind CSS
+- Next.js API Routes (`src/app/api/**/route.ts`)
+- Manta table storage (database layer)
 
-## Getting Started
+Why this stack:
 
-### Prerequisites
+- Next.js provides frontend + backend in one codebase.
+- TypeScript improves reliability with static typing.
+- API routes keep business logic server-side and secure.
+- Tailwind CSS enables fast, consistent UI styling.
 
-- Node.js 18+ 
-- npm or yarn
+## System Architecture
 
-### Installation
+High-level flow:
 
-1. Clone the repository or download the project files
-2. Install dependencies:
-   \`\`\`bash
-   npm install
-   \`\`\`
+1. Frontend pages and components collect user actions.
+2. The frontend sends requests to API routes (`/api/login`, `/api/tickets`, `/api/admin/...`).
+3. API routes validate input, check authentication/role, and call Manta.
+4. Manta stores and returns ticket/user records.
+5. API responses are rendered in user and admin dashboards.
 
-3. Run the development server:
-   \`\`\`bash
-   npm run dev
-   \`\`\`
+## Folder Structure
 
-4. Open [http://localhost:3000](http://localhost:3000) in your browser
+Simplified structure:
 
-## Demo Credentials
+```text
+src/
+   app/
+      api/
+         login/route.ts
+         signup/route.ts
+         logout/route.ts
+         check-auth/route.ts
+         tickets/route.ts
+         tickets/[id]/route.ts
+         admin/
+            admin-tickets-route/route.ts
+            admin-tickets-route/[ticketId]/route.ts
+            admin-users-route/route.ts
+      admin-dashboard/
+      user-dashboard/
+      login/
+      signup/
+   components/
+      auth-provider.tsx
+      create-ticket-form.tsx
+      ticket-list.tsx
+      admin-ticket-list.tsx
+      admin-users-list.tsx
+   lib/
+      manta-client.ts
+      server-session.ts
+      ticket-number.ts
+      ticket-table-resolver.ts
+```
 
-For testing purposes, use these credentials:
+## Installation and Setup
 
-- **Email**: demo@example.com
-- **Password**: demo123
+### 1. Clone repository
 
-## Project Structure
+```bash
+git clone <your-repo-url>
+cd tickly
+```
 
-\`\`\`
-├── app/
-│   ├── layout.tsx           # Root layout with auth provider
-│   ├── page.tsx             # Landing page
-|   ├── admin/
-│   │   └── page.tsx         # Admin page
-│   ├── login/
-│   │   └── page.tsx         # Login page
-│   ├── signup/
-│   │   └── page.tsx         # Signup page
-│   ├── dashboard/
-│   │   └── page.tsx         # Dashboard with statistics
-│   ├── tickets/
-│   │   └── page.tsx         # Tickets management page
-│   └── globals.css          # Global styles and design tokens
-├── components/
-│   ├── auth-provider.tsx    # Auth context and route protection
-│   ├── dashboard-header.tsx # Header with user info
-│   ├── stats-cards.tsx      # Statistics cards component
-│   ├── ticket-list.tsx      # Ticket list with edit modal
-│   ├── ticket-card.tsx      # Individual ticket card
-│   ├── create-ticket-form.tsx # Form for creating tickets
-│   ├── edit-ticket-form.tsx # Form for editing tickets
-│   ├── login-form.tsx       # Login form component
-│   ├── signup-form.tsx      # Signup form component
-│   ├── modal.tsx            # Reusable modal component
-│   ├── form-error.tsx       # Error message component
-│   └── form-success.tsx     # Success message component
-└── lib/
-    ├── auth.ts              # Authentication utilities
-    ├── tickets.ts           # Ticket management utilities
-    └── validation.ts        # Form validation utilities
-\`\`\`
+### 2. Install dependencies
+
+```bash
+npm install
+```
+
+### 3. Configure environment variables
+
+Create a `.env` file in the project root and add required variables (see section below).
+
+### 4. Run development server
+
+```bash
+npm run dev
+```
+
+Open `http://localhost:3000`.
+
+## Environment Variables
+
+Add these values to `.env`:
+
+```env
+MANTAHQ_SDK_KEY=your_manta_sdk_key
+MANTA_BASE_URL=your_manta_base_url
+MANTA_TICKETS_TABLE=your_ticket_table_name
+```
+
+Notes:
+
+- `MANTAHQ_SDK_KEY`: used by the Manta SDK client.
+- `MANTA_BASE_URL`: used for login/signup route requests.
+- `MANTA_TICKETS_TABLE`: optional explicit ticket table name resolver.
 
 ## Usage
 
-### Creating an Account
+### User flow
 
-1. Click "Sign up" on the landing page
-2. Fill in your name, email, and password
-3. Confirm your password and submit
-4. You'll be automatically logged in and redirected to the dashboard
+1. Open landing page.
+2. Sign up or log in.
+3. Create a support ticket.
+4. View tickets and track ticket status updates.
 
-### Logging In
+### Admin flow
 
-1. Click "Log in" on the landing page
-2. Enter your email and password
-3. Click "Sign in" to access your dashboard
+1. Log in as an admin user.
+2. Open admin dashboard.
+3. View all tickets (newest first).
+4. Open a single ticket and manage status/notes.
+5. View and manage users.
 
-### Managing Tickets
+## Screenshots or Demo
 
-1. From the dashboard, click "Go to Tickets" or navigate to the Tickets page
-2. Click "New Ticket" to create a ticket
-3. Fill in the title, description, and priority
-4. Click "Create Ticket" to save
-5. Edit tickets by clicking the edit icon
-6. Delete tickets by clicking the delete icon
-7. Update ticket status and priority from the edit form
+Add screenshots or a demo link here.
 
-### Dashboard
+- Landing page: `docs/landing-page.png`
+- User dashboard: `docs/user-dashboard.png`
+- Admin dashboard: `docs/admin-dashboard.png`
+- Demo video: `https://tickyapp.netlify.app/`
 
-The dashboard displays:
-- **Total Tickets**: Count of all your tickets
-- **Open**: Tickets waiting to be started
-- **In Progress**: Tickets currently being worked on
-- **Closed**: Completed tickets
+## Future Improvements
 
-## Form Validation
+- Email notifications for ticket updates
+- File attachments on tickets
+- Advanced analytics dashboard
+- Pagination and filtering for large ticket lists
+- Full-text search for tickets/users
+- Audit logs for admin actions
 
-All forms include comprehensive validation:
+## Author
 
-### Login Form
-- Email must be a valid email address
-- Password must be at least 6 characters
-
-### Signup Form
-- Name must be 2-100 characters
-- Email must be a valid email address
-- Password must be at least 6 characters
-- Passwords must match
-
-### Ticket Forms
-- Title must be 3-200 characters
-- Description must be 10-2000 characters
-- Priority is required (Low, Medium, High)
-- Status is required (Open, In Progress, Closed)
-
-## Data Storage
-
-This application uses browser localStorage for data persistence:
-- User sessions are stored in `ticketflow_session`
-- Tickets are stored in `ticketflow_tickets`
-
-**Note**: Data is stored locally in the browser and will be lost if browser data is cleared.
-
-## Styling
-
-The application uses Tailwind CSS v4 with a custom design token system:
-
-### Color Scheme
-- **Primary**: Blue (#3b82f6) - Main brand color
-- **Accent**: Purple (#8b5cf6) - Secondary accent
-- **Status Colors**:
-  - Open: Amber
-  - In Progress: Blue
-  - Closed: Green
-
-### Design Tokens
-All colors are defined as CSS variables in `globals.css` for easy theming and consistency.
-
-## Accessibility
-
-The application includes:
-- Semantic HTML elements
-- ARIA labels and roles
-- Keyboard navigation support
-- Color contrast compliance
-- Screen reader friendly forms
-
-## Troubleshooting
-
-### Lost Data After Refresh
-Data is stored in localStorage. If you clear your browser data, all tickets and sessions will be lost.
-
-### Can't Login
-Make sure you've created an account first. Use the demo credentials (demo@example.com / demo123) to test.
-
-### Form Validation Errors
-Check the error messages displayed below each field. They indicate what needs to be corrected.
-
-## License
-
-This project is open source and available under the MIT License.
-
-## Support
-
-For issues or questions, please refer to the documentation or create an issue in the repository.
+- Name: PsalmoTee
+- GitHub: `https://github.com/psalmotee`

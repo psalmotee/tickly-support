@@ -152,7 +152,16 @@ async function ensureCreatedTimestampPersisted(params: {
   // Only trust the early-exit when Manta itself returned the record AND
   // confirmed created_at is stored. When createdRecord is our own payload
   // fallback, created_at is present in memory but may not be in the DB.
-  if (fromApiResponse && getCreatedTimestampFromRecord(createdRecord)) {
+  const persistedTicketId =
+    (createdRecord.ticket_id as string) ||
+    (createdRecord.ticketId as string) ||
+    "";
+
+  if (
+    fromApiResponse &&
+    getCreatedTimestampFromRecord(createdRecord) &&
+    isNonEmptyString(persistedTicketId)
+  ) {
     return createdRecord;
   }
 

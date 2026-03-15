@@ -57,16 +57,7 @@ export function CreateTicketForm({ onSuccess }: CreateTicketFormProps) {
         return;
       }
 
-      const createdTicket: Ticket = result.ticket || {
-        id: crypto.randomUUID(),
-        title,
-        description,
-        priority,
-        status: "open",
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        userId: session.user.id,
-      };
+      const createdTicket: Ticket | undefined = result.ticket;
 
       setTitle("");
       setDescription("");

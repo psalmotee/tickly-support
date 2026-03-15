@@ -228,7 +228,7 @@ export function AdminTicketList({ onStatsChange }: AdminTicketListProps) {
                           {ticket.title}
                         </NextLink>
                         <p className="text-xs text-muted-foreground mt-1">
-                          Ticket ID: {ticket.ticketId || ticket.id}
+                          Ticket ID: {ticket.ticketId || "Not set"}
                         </p>
                         <p className="text-xs text-muted-foreground mt-1 line-clamp-1">
                           {ticket.description}
