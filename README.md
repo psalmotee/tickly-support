@@ -146,9 +146,9 @@ Notes:
 ## Screenshots or Demo
 
 - [Landing page](docs/landing-page.png)
-- [User dashboard][](docs/user-dashboard.png)
-- [Admin dashboard][](docs/admin-dashboard.png)
-- [Demo video](https://tickyapp.netlify.app/)
+- [User dashboard](docs/user-dashboard.png)
+- [Admin dashboard](docs/admin-dashboard.png)
+- [Demo video](docs/Tickly-video.mp4)
 - [Live URL](https://tickyapp.netlify.app/)
 
 ## Future Improvements
@@ -162,5 +162,5 @@ Notes:
 
 ## Author
 
-- Name: PsalmoTee
+- Name: Samson Moradeyo
 - [GitHub](https://github.com/psalmotee)

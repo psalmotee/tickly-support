@@ -13,18 +13,15 @@
   --popover-foreground: #111827;
 
   --primary: #10b981;
-  /* Emerald 500 */
   --primary-foreground: #ffffff;
 
   --secondary: #f3f4f6;
-  /* Light gray for boxes */
   --secondary-foreground: #111827;
 
   --muted: #f3f4f6;
   --muted-foreground: #6b7280;
 
   --accent: #d1fae5;
-  /* Soft mint */
   --accent-foreground: #065f46;
 
   --destructive: #ef4444;
@@ -56,7 +53,7 @@
   --popover: #1f2937;
   --popover-foreground: #f9fafb;
 
-  --primary: #34d399; /* Emerald 400 for softer look in dark mode */
+  --primary: #34d399;
   --primary-foreground: #052e16;
 
   --secondary: #374151;
@@ -65,7 +62,7 @@
   --muted: #374151;
   --muted-foreground: #9ca3af;
 
-  --accent: #064e3b; /* Deep mint tint */
+  --accent: #064e3b;
   --accent-foreground: #a7f3d0;
 
   --destructive: #b91c1c;
@@ -87,7 +84,6 @@
 
 
 @theme inline {
-  /* optional: --font-sans, --font-serif, --font-mono if they are applied in the layout.tsx */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);

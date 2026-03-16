@@ -99,7 +99,6 @@ export async function PATCH(req: Request) {
             error instanceof Error ? error.message : "Failed to update role";
           lastError = message;
 
-          // Continue trying fallbacks for schema/field differences.
           if (!message.toLowerCase().includes("unknown field")) {
             continue;
           }

@@ -9,6 +9,9 @@ export const metadata: Metadata = {
   title: "Tickly - Ticket Management System",
   description:
     "Streamline your workflow with Tickly - a modern ticket management system",
+    icons: {
+    icon: "/ticket.svg",
+  },
 };
 
 export default function RootLayout({

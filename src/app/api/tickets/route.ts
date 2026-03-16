@@ -131,11 +131,6 @@ async function ensureCreatedTimestampPersisted(params: {
   now: string;
   normalizedTitle: string;
   normalizedDescription: string;
-  /**
-   * True when createdRecord came directly from Manta's API response.
-   * False when it is the local payload object we sent (no guarantee the
-   * DB stored every field we included, e.g. created_at may be silently dropped).
-   */
   fromApiResponse: boolean;
 }): Promise<Record<string, unknown>> {
   const {
@@ -149,9 +144,6 @@ async function ensureCreatedTimestampPersisted(params: {
     fromApiResponse,
   } = params;
 
-  // Only trust the early-exit when Manta itself returned the record AND
-  // confirmed created_at is stored. When createdRecord is our own payload
-  // fallback, created_at is present in memory but may not be in the DB.
   const persistedTicketId =
     (createdRecord.ticket_id as string) ||
     (createdRecord.ticketId as string) ||
@@ -255,8 +247,6 @@ async function ensureCreatedTimestampPersisted(params: {
     }
   }
 
-  // Some create responses don't include row IDs; locate the newly created row
-  // using user + content signals, then backfill created_at/ticket_id on that row.
   const userWhereCandidates: Array<Record<string, unknown>> = [
     { user_id: resolvedUserId },
     { userId: resolvedUserId },
@@ -322,7 +312,6 @@ async function ensureCreatedTimestampPersisted(params: {
     }
   }
 
-  // Preserve API consistency even when table schema blocks created-at persistence.
   return {
     ...createdRecord,
     created_at: now,
@@ -566,7 +555,6 @@ export async function POST(req: Request) {
       };
 
       const payloadCandidates: Array<Record<string, unknown>> = [
-        // Preferred payload for support_tickets schema.
         {
           ...commonFields,
           ticket_id: generatedTicketId,
@@ -574,7 +562,6 @@ export async function POST(req: Request) {
           created_at: now,
           updated_at: now,
         },
-        // Some tables accept both naming styles.
         {
           ...commonFields,
           ticketId: generatedTicketId,

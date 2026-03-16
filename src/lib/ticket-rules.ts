@@ -5,7 +5,6 @@ export type ValidTicketPriority = (typeof VALID_TICKET_PRIORITIES)[number];
 export type ValidTicketStatus = (typeof VALID_TICKET_STATUSES)[number];
 
 const STATUS_TRANSITIONS: Record<ValidTicketStatus, ValidTicketStatus[]> = {
-  // Admins may resolve directly without passing through in-progress.
   open: ["in-progress", "closed"],
   "in-progress": ["closed"],
   closed: [],
