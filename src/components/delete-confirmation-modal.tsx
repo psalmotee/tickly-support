@@ -31,7 +31,7 @@ export function DeleteConfirmationModal({
       <p className="text-sm text-muted-foreground mb-2">{description}</p>
       <p className="text-sm font-medium text-foreground mb-6">
         This will permanently delete{" "}
-        <span className="text-destructive">"{itemName}"</span>
+        <span className="text-destructive">&quot;{itemName}&quot;</span>
       </p>
 
       <div className="flex gap-3">

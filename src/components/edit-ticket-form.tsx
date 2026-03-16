@@ -4,7 +4,6 @@ import type React from "react";
 
 import { useState } from "react";
 import { type Ticket, type TicketStatus } from "@/lib/ticket-local-store";
-import { AlertCircle } from "lucide-react";
 import { FormError } from "./form-error";
 
 interface EditTicketFormProps {
@@ -15,8 +14,8 @@ interface EditTicketFormProps {
 export function EditTicketForm({ ticket, onSuccess }: EditTicketFormProps) {
   const [title, setTitle] = useState(ticket.title);
   const [description, setDescription] = useState(ticket.description);
-  const [status, setStatus] = useState<TicketStatus>(ticket.status);
-  const [priority, setPriority] = useState(ticket.priority);
+  const [status] = useState<TicketStatus>(ticket.status);
+  const [priority] = useState(ticket.priority);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
