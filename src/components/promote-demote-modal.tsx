@@ -13,7 +13,6 @@ interface PromoteDemoteModalProps {
 }
 
 export function PromoteDemoteModal({
-  title,
   description,
   itemName,
   action,
@@ -22,9 +21,6 @@ export function PromoteDemoteModal({
   isLoading = false,
 }: PromoteDemoteModalProps) {
   const isPrimary = action === "promote";
-  const Icon = isPrimary ? ArrowUp : ArrowDown;
-  const bgColor = isPrimary ? "bg-primary/10" : "bg-amber-500/10";
-  const iconColor = isPrimary ? "text-primary" : "text-amber-700";
   const buttonColor = isPrimary
     ? "bg-primary hover:bg-primary/90"
     : "bg-amber-600 hover:bg-amber-600/90";
@@ -32,16 +28,7 @@ export function PromoteDemoteModal({
 
   return (
     <div>
-      <div className="flex items-center gap-3 mb-4">
-        <div
-          className={`flex h-10 w-10 items-center justify-center rounded-lg ${bgColor}`}
-        >
-          <Icon className={`h-5 w-5 ${iconColor}`} />
-        </div>
-        <h2 className="text-lg font-semibold text-foreground">{title}</h2>
-      </div>
-
-      <p className="text-sm text-muted-foreground mb-2">{description}</p>
+            <p className="text-sm text-muted-foreground mb-2">{description}</p>
       <p className="text-sm font-medium text-foreground mb-6">
         This will {actionText.toLowerCase()}{" "}
         <span className={isPrimary ? "text-primary" : "text-amber-700"}>

@@ -5,7 +5,7 @@ import NextLink from "next/link";
 import { type Ticket } from "@/lib/ticket-local-store";
 import { Modal } from "./modal";
 import { DeleteConfirmationModal } from "./delete-confirmation-modal";
-import { Trash2, ChevronDown, CheckCircle2 } from "lucide-react";
+import { Trash2, ChevronDown, CheckCircle2, AlertTriangle } from "lucide-react";
 import { toast } from "react-toastify";
 import { handleAdminApiAuthRedirect } from "@/lib/admin-api-client";
 
@@ -317,6 +317,9 @@ export function AdminTicketList({ onStatsChange }: AdminTicketListProps) {
       <Modal
         isOpen={deleteModal.isOpen}
         onClose={() => setDeleteModal({ isOpen: false, ticket: null })}
+        className="bg-destructive/10"
+                icon={<AlertTriangle className="h-5 w-5 text-destructive" />}
+        
         title="Delete Ticket"
       >
         {deleteModal.ticket && (

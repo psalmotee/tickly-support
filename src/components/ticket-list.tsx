@@ -8,6 +8,7 @@ import { EditTicketForm } from "./edit-ticket-form";
 import { DeleteConfirmationModal } from "./delete-confirmation-modal";
 import { toast } from "react-toastify";
 import { useAuth } from "./auth-provider";
+import { AlertTriangle, Edit } from "lucide-react";
 
 interface TicketListProps {
   refreshTrigger: number;
@@ -169,6 +170,8 @@ export function TicketList({
       <Modal
         isOpen={isEditModalOpen}
         onClose={() => setIsEditModalOpen(false)}
+        className="bg-primary/10"
+        icon={<Edit className="h-5 w-5 text-primary" />}
         title="Edit Ticket"
       >
         {selectedTicket && (
@@ -182,6 +185,8 @@ export function TicketList({
       <Modal
         isOpen={isDeleteModalOpen}
         onClose={() => setIsDeleteModalOpen(false)}
+        className="bg-destructive/10"
+        icon={<AlertTriangle className="h-5 w-5 text-destructive" />}
         title="Delete Ticket"
       >
         {selectedTicket && (

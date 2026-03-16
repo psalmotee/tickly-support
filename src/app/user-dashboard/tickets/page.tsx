@@ -59,6 +59,8 @@ export default function TicketsPage() {
       <Modal
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
+        className="bg-primary/10"
+        icon={<Plus className="h-5 w-5 text-primary" />}
         title="Create New Ticket"
       >
         <CreateTicketForm onSuccess={handleCreateSuccess} />

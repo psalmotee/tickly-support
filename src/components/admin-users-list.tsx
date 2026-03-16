@@ -10,6 +10,8 @@ import {
   Loader2,
   ChevronLeft,
   ChevronRight,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import { Modal } from "./modal";
 import { PromoteDemoteModal } from "./promote-demote-modal";
@@ -237,6 +239,15 @@ export function AdminUserList() {
       <Modal
         isOpen={roleModal.isOpen}
         onClose={closeRoleModal}
+        
+        className={roleModal.action === "promote" ? "bg-primary/10" : "bg-amber-500/10"}
+        icon={
+          roleModal.action === "promote" ? (
+            <ArrowUp className="h-5 w-5 text-primary" />
+          ) : (
+            <ArrowDown className="h-5 w-5 text-amber-700" />
+          )
+        }
         title={roleModal.action === "promote" ? "Promote User" : "Demote User"}
       >
         {roleModal.user && (
