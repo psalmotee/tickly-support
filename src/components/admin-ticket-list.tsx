@@ -52,8 +52,8 @@ export function AdminTicketList({ onStatsChange }: AdminTicketListProps) {
         return;
       }
 
-      // Apply null-safe sort on the client as a safety net
-      const nextTickets = sortByCreatedAtDesc();
+      // ✅ Pass data.tickets into the sort function
+      const nextTickets = sortByCreatedAtDesc(data.tickets || []);
 
       startTransition(() => {
         setTickets(nextTickets);
