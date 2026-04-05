@@ -1,5 +1,3 @@
-// Form validation utilities
-
 export interface ValidationError {
   field: string;
   message: string;

@@ -2,11 +2,6 @@ import { manta } from "@/lib/manta-client";
 
 const MANTA_TICKETS_TABLE = process.env.MANTA_TICKETS_TABLE;
 
-/**
- * No in-memory cache — the cached value survives hot reloads in dev
- * and causes the admin dashboard to keep hitting the wrong table after
- * an .env change. We read the env var fresh on every cold start instead.
- */
 export async function resolveTicketTable(): Promise<string> {
   const tableName = process.env.MANTA_TICKETS_TABLE || MANTA_TICKETS_TABLE;
 

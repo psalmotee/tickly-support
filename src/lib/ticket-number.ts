@@ -10,7 +10,6 @@ export function resolvePublicTicketNumber(
     return explicit.trim();
   }
 
-  // Fallback for old records created before ticket_id was saved
   const uuid = (record.id as string) || (record._id as string) || "";
 
   return formatTicketIdForDisplay(uuid);

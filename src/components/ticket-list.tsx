@@ -42,7 +42,6 @@ export function TicketList({
         const data = await res.json();
 
         if (data.success) {
-          // Apply null-safe sort so newly created tickets always appear at top
           setTickets(sortByCreatedAtDesc(data.tickets || []));
         } else {
           toast.error(data.error || "Failed to load tickets");

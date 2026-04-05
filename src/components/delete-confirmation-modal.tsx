@@ -1,7 +1,4 @@
 "use client";
-
-import { AlertTriangle } from "lucide-react";
-
 interface DeleteConfirmationModalProps {
   title: string;
   description: string;
@@ -12,7 +9,6 @@ interface DeleteConfirmationModalProps {
 }
 
 export function DeleteConfirmationModal({
-  title,
   description,
   itemName,
   onConfirm,

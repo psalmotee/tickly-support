@@ -1,8 +1,3 @@
-/**
- * Sorts records by createdAt descending (newest first).
- * Handles null/missing/invalid dates by pushing them to the bottom.
- * Checks both camelCase (createdAt) and snake_case (created_at) variants.
- */
 export function sortByCreatedAtDesc<T extends { createdAt?: string; created_at?: string }>(
   records: T[]
 ): T[] {

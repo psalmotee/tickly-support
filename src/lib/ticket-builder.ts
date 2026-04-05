@@ -3,20 +3,6 @@ import type { TicketPriority } from "./ticket-local-store";
 import { VALID_TICKET_PRIORITIES } from "./ticket-rules";
 import { generateTicketId } from "./ticket-id";
 
-/**
- * Confirmed schema for tickets-table (probe-verified 2026-04-03)
- *
- * INSERT accepts (camelCase):  title, description, status, priority,
- *                              userId, ticketId, internalNotes
- * UPDATE accepts (camelCase):  ticketId, internalNotes, createdAt,
- *                              updatedAt, status, priority, userId
- * READ returns  (snake_case):  ticket_id, internal_notes, user_id,
- *                              created_at, updated_at, createdAt, updatedAt
- *
- * created_at / updated_at cannot be set on INSERT — Manta controls them.
- * We set createdAt / updatedAt via a follow-up UPDATE call instead.
- */
-
 export interface InsertTicketPayload {
   title: string;
   description: string;
@@ -34,11 +20,6 @@ export interface BuildTicketInput {
   userId: string;
 }
 
-/**
- * Builds a complete, validated ticket insert payload.
- * Uses only the field names Manta accepts on INSERT.
- * ticketId is generated here — never passed from the frontend.
- */
 export function buildTicket(input: BuildTicketInput): InsertTicketPayload {
   const { title, description, priority, userId } = input;
 
@@ -63,11 +44,6 @@ export function buildTicket(input: BuildTicketInput): InsertTicketPayload {
   };
 }
 
-/**
- * Generates a unique correlation token embedded in internalNotes
- * so we can find the exact record we just inserted — immune to
- * duplicate title/description matches.
- */
 export function buildInsertCorrelationToken(): string {
   return `__insert_token__:${randomUUID()}:${Date.now()}`;
 }

@@ -13,8 +13,6 @@ import {
   stripCorrelationToken,
 } from "@/lib/ticket-builder";
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
 function mapTicketRecord(record: Record<string, unknown>) {
   const internalNotes =
     (record.internalNotes as string) || (record.internal_notes as string) || "";
@@ -27,7 +25,7 @@ function mapTicketRecord(record: Record<string, unknown>) {
     priority: (record.priority as string) || "medium",
     status: (record.status as string) || "open",
     userId: (record.userId as string) || (record.user_id as string) || "",
-    // Manta auto-manages createdAt. created_at is always null on this table.
+   
     createdAt:
       (record.createdAt as string) || (record.created_at as string) || "",
     updatedAt:
@@ -67,18 +65,12 @@ async function resolveExistingUserId(sessionUser: {
   return null;
 }
 
-/**
- * Finds the record we just inserted by scanning internalNotes
- * for the unique correlation token.
- * Immune to duplicate title/description — token is a UUID.
- */
 async function findRecordByCorrelationToken(
   ticketTable: string,
   correlationToken: string,
   userId: string,
 ): Promise<Record<string, unknown> | null> {
-  // On READ Manta returns user_id (snake_case) even though
-  // we inserted with userId (camelCase)
+
   for (const field of ["user_id", "userId"]) {
     try {
       const response = await manta.fetchAllRecords({
@@ -107,8 +99,6 @@ async function findRecordByCorrelationToken(
   }
   return null;
 }
-
-// ─── GET ──────────────────────────────────────────────────────────────────────
 
 export async function GET(req: Request) {
   try {
@@ -173,8 +163,6 @@ export async function GET(req: Request) {
   }
 }
 
-// ─── POST ─────────────────────────────────────────────────────────────────────
-
 export async function POST(req: Request) {
   try {
     const sessionUser = await getRequestSessionUser();
@@ -222,8 +210,6 @@ export async function POST(req: Request) {
 
     const ticketTable = await resolveTicketTable();
 
-    // Build payload using ONLY probe-confirmed INSERT fields:
-    // title, description, status, priority, userId, ticketId, internalNotes
     const payload = buildTicket({
       title: (title as string).trim(),
       description: (description as string).trim(),
@@ -231,25 +217,25 @@ export async function POST(req: Request) {
       userId: resolvedUserId,
     });
 
-    // Embed correlation token in internalNotes so we can find this
-    // exact record after insert — immune to duplicate content matches
     const correlationToken = buildInsertCorrelationToken();
     const payloadWithToken: Record<string, unknown> = {
       ...payload,
       internalNotes: correlationToken,
     };
 
-    let createResult: {
+    type CreateResult = {
       success?: boolean;
       status?: boolean;
       message?: string;
-    } | null = null;
+    };
+
+    let createResult: CreateResult | null = null;
 
     try {
       createResult = (await manta.createRecords({
         table: ticketTable,
         data: [payloadWithToken],
-      })) as typeof createResult;
+      })) as CreateResult;
     } catch (err: unknown) {
       const msg =
         err instanceof Error ? err.message : "Failed to create ticket";
@@ -269,7 +255,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: msg }, { status: 500 });
     }
 
-    // Find the exact record we just created using the correlation token
     const createdRecord = await findRecordByCorrelationToken(
       ticketTable,
       correlationToken,
@@ -291,9 +276,6 @@ export async function POST(req: Request) {
     const recordId =
       (createdRecord.id as string) || (createdRecord._id as string) || "";
 
-    // Clean the correlation token out of internalNotes.
-    // Also set createdAt/updatedAt via UPDATE — these cannot be set on INSERT
-    // but are accepted on UPDATE (probe-confirmed).
     const cleanNotes = stripCorrelationToken(
       (createdRecord.internal_notes as string) ||
         (createdRecord.internalNotes as string) ||
@@ -314,7 +296,7 @@ export async function POST(req: Request) {
           },
         });
       } catch (updateErr) {
-        // Non-fatal — ticket was created successfully, cleanup just failed
+        
         console.warn(
           "[tickets][POST] Follow-up update failed:",
           updateErr instanceof Error ? updateErr.message : updateErr,
@@ -326,7 +308,7 @@ export async function POST(req: Request) {
       success: true,
       ticket: mapTicketRecord({
         ...createdRecord,
-        // Reflect the values we just wrote so the response is accurate
+        
         ticket_id: payload.ticketId,
         internal_notes: cleanNotes,
         createdAt: now,

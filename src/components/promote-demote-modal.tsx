@@ -1,7 +1,4 @@
 "use client";
-
-import { ArrowUp, ArrowDown } from "lucide-react";
-
 interface PromoteDemoteModalProps {
   title: string;
   description: string;

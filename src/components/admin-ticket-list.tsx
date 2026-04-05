@@ -19,10 +19,12 @@ interface AdminTicketListProps {
   }) => void;
 }
 
+type AdminTicket = Ticket & {
+  user?: { fullName?: string; email?: string } | null;
+};
+
 export function AdminTicketList({ onStatsChange }: AdminTicketListProps) {
-  const [tickets, setTickets] = useState<
-    Array<Ticket & { user?: { fullName?: string; email?: string } | null }>
-  >([]);
+  const [tickets, setTickets] = useState<Array<AdminTicket>>([]);
   const [deleteModal, setDeleteModal] = useState<{
     isOpen: boolean;
     ticket: Ticket | null;
@@ -52,8 +54,8 @@ export function AdminTicketList({ onStatsChange }: AdminTicketListProps) {
         return;
       }
 
-      // ✅ Pass data.tickets into the sort function
-      const nextTickets = sortByCreatedAtDesc(data.tickets || []);
+      const rawTickets = (data.tickets || []) as Array<AdminTicket>;
+      const nextTickets = sortByCreatedAtDesc(rawTickets) as Array<AdminTicket>;
 
       startTransition(() => {
         setTickets(nextTickets);
@@ -61,12 +63,11 @@ export function AdminTicketList({ onStatsChange }: AdminTicketListProps) {
         if (onStatsChange) {
           onStatsChange({
             total: nextTickets.length,
-            open: nextTickets.filter((t: Ticket) => t.status === "open").length,
+            open: nextTickets.filter((t) => t.status === "open").length,
             inProgress: nextTickets.filter(
-              (t: Ticket) => t.status === "in-progress",
+              (t) => t.status === "in-progress",
             ).length,
-            closed: nextTickets.filter((t: Ticket) => t.status === "closed")
-              .length,
+            closed: nextTickets.filter((t) => t.status === "closed").length,
           });
         }
       });
@@ -110,7 +111,7 @@ export function AdminTicketList({ onStatsChange }: AdminTicketListProps) {
     }
 
     setEditingId(null);
-    toast.success(`Ticket marked as ${getStatusLabel(status)} ✅`);
+    toast.success(`Ticket marked as ${getStatusLabel(status)}`);
   };
 
   const handleDeleteClick = (ticket: Ticket) => {
@@ -144,7 +145,7 @@ export function AdminTicketList({ onStatsChange }: AdminTicketListProps) {
     await loadTickets();
     setDeleteModal({ isOpen: false, ticket: null });
     setIsLoading(false);
-    toast.success("Ticket marked deleted for user view 🗑️");
+    toast.success("Ticket marked deleted for user view");
   };
 
   const getStatusColor = (status: string) => {
