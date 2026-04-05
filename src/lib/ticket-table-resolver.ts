@@ -2,32 +2,28 @@ import { manta } from "@/lib/manta-client";
 
 const MANTA_TICKETS_TABLE = process.env.MANTA_TICKETS_TABLE;
 
-const TICKET_TABLE = [MANTA_TICKETS_TABLE].filter(
-  Boolean,
-) as string[];
-
-let cachedTicketTable: string | null = null;
-
+/**
+ * No in-memory cache — the cached value survives hot reloads in dev
+ * and causes the admin dashboard to keep hitting the wrong table after
+ * an .env change. We read the env var fresh on every cold start instead.
+ */
 export async function resolveTicketTable(): Promise<string> {
-  if (cachedTicketTable) return cachedTicketTable;
+  const tableName = process.env.MANTA_TICKETS_TABLE || MANTA_TICKETS_TABLE;
 
-  for (const table of TICKET_TABLE) {
-    try {
-      await manta.fetchAllRecords({ table, list: 1 });
-      cachedTicketTable = table;
-      console.info("[ticket-table-resolver] Resolved ticket table", {
-        table,
-      });
-      return table;
-    } catch (error: unknown) {
-      console.warn("[ticket-table-resolver] Table probe failed", {
-        table,
-        error,
-      });
-    }
+  if (!tableName) {
+    throw new Error(
+      "MANTA_TICKETS_TABLE is not set in .env. Add it and restart the dev server.",
+    );
   }
 
-  throw new Error(
-    `Configured ticket table '${MANTA_TICKETS_TABLE}' is not accessible. Ensure MANTA_TICKETS_TABLE is correct and the SDK key has access to this table.`,
-  );
+  try {
+    await manta.fetchAllRecords({ table: tableName, list: 1 });
+    return tableName;
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    throw new Error(
+      `Ticket table "${tableName}" is not accessible: ${message}. ` +
+        `Check MANTA_TICKETS_TABLE in .env and restart the dev server.`,
+    );
+  }
 }

@@ -110,6 +110,7 @@ export function CreateTicketForm({ onSuccess }: CreateTicketFormProps) {
           Priority
         </label>
         <select
+          title="Priority"
           value={priority}
           onChange={(e) =>
             setPriority(e.target.value as "low" | "medium" | "high")

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { type Ticket } from "@/lib/ticket-local-store";
+import { sortByCreatedAtDesc } from "@/lib/sort-utils";
 import { TicketCard } from "./ticket-card";
 import { Modal } from "./modal";
 import { EditTicketForm } from "./edit-ticket-form";
@@ -41,7 +42,8 @@ export function TicketList({
         const data = await res.json();
 
         if (data.success) {
-          setTickets(data.tickets || []);
+          // Apply null-safe sort so newly created tickets always appear at top
+          setTickets(sortByCreatedAtDesc(data.tickets || []));
         } else {
           toast.error(data.error || "Failed to load tickets");
         }
@@ -65,16 +67,18 @@ export function TicketList({
   useEffect(() => {
     if (!latestCreatedTicket) return;
 
+    // Optimistically prepend the new ticket so the UI is instant
     const optimisticTimer = setTimeout(() => {
       setTickets((prev) => {
         const exists = prev.some(
           (ticket) => ticket.id === latestCreatedTicket.id,
         );
         if (exists) return prev;
-        return [latestCreatedTicket, ...prev];
+        return sortByCreatedAtDesc([latestCreatedTicket, ...prev]);
       });
     }, 0);
 
+    // Then sync with the server to get the final state
     const syncTimer = setTimeout(() => {
       if (userId) {
         void loadTickets(userId);

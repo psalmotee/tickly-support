@@ -4,16 +4,17 @@ import { resolveTicketTable } from "@/lib/ticket-table-resolver";
 import { isTicketDeletedByAdmin } from "@/lib/ticket-soft-delete";
 import { getRequestSessionUser } from "@/lib/server-session";
 import { resolvePublicTicketNumber } from "@/lib/ticket-number";
+import { sortByCreatedAtDesc } from "@/lib/sort-utils";
 
 function mapTicketRecord(record: Record<string, unknown>) {
   const internalNotes =
-    (record.internalNotes as string) || (record.internal_notes as string) || "";
-  const recordId = (record.id as string) || (record._id as string) || "";
-  const ticketId = resolvePublicTicketNumber(record);
+    (record.internalNotes as string) ||
+    (record.internal_notes as string) ||
+    "";
 
   return {
-    id: recordId,
-    ticketId,
+    id: (record.id as string) || (record._id as string) || "",
+    ticketId: resolvePublicTicketNumber(record),
     title: (record.title as string) || "",
     description: (record.description as string) || "",
     priority: (record.priority as string) || "medium",
@@ -21,15 +22,14 @@ function mapTicketRecord(record: Record<string, unknown>) {
     userId:
       (record.userId as string) ||
       (record.user_id as string) ||
-      (record.userid as string) ||
       "",
     createdAt:
-      (record.createdAt as string) || (record.created_at as string) || "",
+      (record.createdAt as string) ||
+      (record.created_at as string) ||
+      "",
     updatedAt:
       (record.updatedAt as string) ||
       (record.updated_at as string) ||
-      (record.createdAt as string) ||
-      (record.created_at as string) ||
       "",
     internalNotes,
     deletedByAdmin: isTicketDeletedByAdmin(internalNotes),
@@ -54,13 +54,35 @@ export async function GET() {
       );
     }
 
-    const ticketTable = await resolveTicketTable();
+    let ticketTable: string;
+    try {
+      ticketTable = await resolveTicketTable();
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : "Ticket table not accessible";
+      console.error("[admin-tickets][GET] resolveTicketTable failed:", message);
+      return NextResponse.json(
+        { success: false, error: message },
+        { status: 500 },
+      );
+    }
 
-    const response = await manta.fetchAllRecords({
-      table: ticketTable,
-      orderBy: "created_at",
-      order: "desc",
-    });
+    let response: { data?: unknown[] };
+    try {
+      response = await manta.fetchAllRecords({
+        table: ticketTable,
+        orderBy: "createdAt",
+        order: "desc",
+      });
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : "Failed to fetch from Manta";
+      console.error("[admin-tickets][GET] fetchAllRecords failed:", message);
+      return NextResponse.json(
+        { success: false, error: `Failed to fetch tickets: ${message}` },
+        { status: 500 },
+      );
+    }
 
     const mappedTickets = Array.isArray(response.data)
       ? response.data.map((record) =>
@@ -68,8 +90,9 @@ export async function GET() {
         )
       : [];
 
+    // Enrich with user display names
     const userIds = Array.from(
-      new Set(mappedTickets.map((ticket) => ticket.userId).filter(Boolean)),
+      new Set(mappedTickets.map((t) => t.userId).filter(Boolean)),
     );
 
     const usersById = new Map<string, { fullName: string; email: string }>();
@@ -77,36 +100,18 @@ export async function GET() {
     await Promise.all(
       userIds.map(async (userId) => {
         try {
-          const userRes = await manta.fetchAllRecords({
+          let userRes = await manta.fetchAllRecords({
             table: "tickly-auth",
             where: { id: userId },
             list: 1,
           });
 
           if (!userRes.status || userRes.data.length === 0) {
-            const fallbackUserRes = await manta.fetchAllRecords({
+            userRes = await manta.fetchAllRecords({
               table: "tickly-auth",
               where: { user_id: userId },
               list: 1,
             });
-
-            if (fallbackUserRes.status && fallbackUserRes.data.length > 0) {
-              const fallbackUser = fallbackUserRes.data[0] as {
-                fullName?: string;
-                fullname?: string;
-                email?: string;
-              };
-
-              usersById.set(userId, {
-                fullName:
-                  fallbackUser.fullName ||
-                  fallbackUser.fullname ||
-                  "Unknown User",
-                email: fallbackUser.email || "",
-              });
-            }
-
-            return;
           }
 
           if (userRes.status && userRes.data.length > 0) {
@@ -115,42 +120,29 @@ export async function GET() {
               fullname?: string;
               email?: string;
             };
-
             usersById.set(userId, {
               fullName: user.fullName || user.fullname || "Unknown User",
               email: user.email || "",
             });
           }
-        } catch {}
+        } catch {
+          // non-fatal
+        }
       }),
     );
 
-    return NextResponse.json({
-      success: true,
-      tickets: mappedTickets.map((ticket) => ({
+    const tickets = sortByCreatedAtDesc(
+      mappedTickets.map((ticket) => ({
         ...ticket,
         user: usersById.get(ticket.userId) || null,
       })),
-    });
+    );
+
+    return NextResponse.json({ success: true, tickets });
   } catch (error: unknown) {
     const message =
       error instanceof Error ? error.message : "Failed to fetch tickets";
-
-    if (
-      typeof message === "string" &&
-      (message.includes("Table not found") ||
-        message.includes("No accessible ticket table found"))
-    ) {
-      return NextResponse.json(
-        {
-          success: false,
-          error:
-            "Ticket table is not available for this SDK key. Set MANTA_TICKETS_TABLE in .env to an existing Manta table.",
-        },
-        { status: 500 },
-      );
-    }
-
+    console.error("[admin-tickets][GET] Unhandled error:", message);
     return NextResponse.json(
       { success: false, error: message },
       { status: 500 },
