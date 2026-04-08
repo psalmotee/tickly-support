@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { manta } from "@/lib/manta-client";
+import { getUserByEmail } from "@/lib/supabase-helpers";
 
 interface TokenPayload {
   sub?: string;
@@ -73,18 +73,10 @@ export async function getRequestSessionUser(): Promise<ApiSessionUser | null> {
     const email = payload?.email || sessionCookie?.email;
     if (!email) return null;
 
-    const response = await manta.fetchAllRecords({
-      table: "tickly-auth",
-      where: { email },
-      list: 1,
-    });
-
-    const userProfile =
-      response.status && response.data.length > 0 ? response.data[0] : null;
+    const userProfile = await getUserByEmail(email);
 
     const userId =
       userProfile?.id ||
-      userProfile?.user_id ||
       sessionCookie?.id ||
       payload?.id ||
       payload?.userId ||
@@ -92,11 +84,7 @@ export async function getRequestSessionUser(): Promise<ApiSessionUser | null> {
       email;
 
     const fullName =
-      userProfile?.fullName ||
-      userProfile?.fullname ||
-      (userProfile?.first_name
-        ? `${String(userProfile.first_name)} ${String(userProfile.last_name || "")}`.trim()
-        : undefined) ||
+      userProfile?.full_name ||
       sessionCookie?.fullName ||
       payload?.fullName ||
       payload?.name ||
@@ -107,11 +95,7 @@ export async function getRequestSessionUser(): Promise<ApiSessionUser | null> {
       email,
       fullName,
       role: normalizeRole(
-        userProfile?.role ||
-          userProfile?.userRole ||
-          userProfile?.user_role ||
-          sessionCookie?.role ||
-          payload?.role,
+        userProfile?.role || sessionCookie?.role || payload?.role,
       ),
     };
   } catch (error: unknown) {

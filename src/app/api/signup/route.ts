@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
-
-const MANTA_BASE_URL = process.env.MANTA_BASE_URL;
+import {
+  validateEmail,
+  validatePassword,
+  validateName,
+} from "@/lib/form-validation";
+import { getUserByEmail } from "@/lib/supabase-helpers";
+import { hashPassword } from "@/lib/password-utils";
+import { supabaseAdmin } from "@/lib/supabase-client";
 
 export async function POST(req: Request) {
   try {
@@ -36,43 +42,62 @@ export async function POST(req: Request) {
       );
     }
 
-    if (!MANTA_BASE_URL) {
-      console.error("[signup] Missing MANTA_BASE_URL environment variable");
+    // Validate inputs
+    const nameError = validateName(fullName);
+    if (nameError) {
       return NextResponse.json(
-        { success: false, error: "Server configuration error." },
-        { status: 500 },
+        { success: false, error: nameError },
+        { status: 400 },
       );
     }
 
-    const mantaRes = await fetch(`${MANTA_BASE_URL}/signup`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        fullname: fullName,
-        email,
-        password,
-        role: "user",
-      }),
-    });
-
-    const data = await mantaRes.json().catch((parseError: unknown) => {
-      console.error("[signup] Failed to parse signup response JSON", {
-        parseError,
-      });
-      return {} as Record<string, unknown>;
-    });
-
-    if (!mantaRes.ok) {
-      const errorMessage =
-        typeof (data as { message?: unknown }).message === "string"
-          ? ((data as { message: string }).message ?? "Signup failed")
-          : "Signup failed";
-
+    const emailError = validateEmail(email);
+    if (emailError) {
       return NextResponse.json(
-        { success: false, error: errorMessage },
-        { status: mantaRes.status },
+        { success: false, error: emailError },
+        { status: 400 },
+      );
+    }
+
+    const passwordError = validatePassword(password);
+    if (passwordError) {
+      return NextResponse.json(
+        { success: false, error: passwordError },
+        { status: 400 },
+      );
+    }
+
+    // Check if user already exists
+    const existingUser = await getUserByEmail(email);
+    if (existingUser) {
+      return NextResponse.json(
+        { success: false, error: "Email already registered" },
+        { status: 409 },
+      );
+    }
+
+    // Hash password and create user using admin client
+    const passwordHash = hashPassword(password);
+
+    const { data: newUser, error: createError } = await supabaseAdmin
+      .from("users")
+      .insert({
+        email: email.toLowerCase(),
+        password_hash: passwordHash,
+        full_name: fullName,
+        role: "user",
+      })
+      .select()
+      .single();
+
+    if (createError || !newUser) {
+      console.error("[signup] Failed to create user in Supabase", {
+        email,
+        error: createError,
+      });
+      return NextResponse.json(
+        { success: false, error: "Failed to create account" },
+        { status: 500 },
       );
     }
 

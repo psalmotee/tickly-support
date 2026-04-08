@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { manta } from "@/lib/manta-client";
-
-const MANTA_BASE_URL = process.env.MANTA_BASE_URL;
+import { verifyPassword } from "@/lib/password-utils";
+import { validateEmail, validatePassword } from "@/lib/form-validation";
+import { supabaseAdmin } from "@/lib/supabase-client";
 
 function normalizeRole(role?: string): "admin" | "user" {
   const value = role?.toLowerCase().trim();
@@ -51,85 +51,69 @@ export async function POST(req: Request) {
       );
     }
 
-    if (!MANTA_BASE_URL) {
-      console.error("[login] Missing MANTA_BASE_URL environment variable");
+    // Validate inputs
+    const emailError = validateEmail(email);
+    if (emailError) {
       return NextResponse.json(
-        { success: false, error: "Server configuration error." },
-        { status: 500 },
+        { success: false, error: emailError },
+        { status: 400 },
       );
     }
 
-    const mantaRes = await fetch(`${MANTA_BASE_URL}/login`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        email,
-        password,
-      }),
-    });
-
-    const data = await mantaRes.json().catch((parseError: unknown) => {
-      console.error("[login] Failed to parse login response JSON", {
-        parseError,
-      });
-      return {} as Record<string, unknown>;
-    });
-
-    if (!mantaRes.ok) {
-      const errorMessage =
-        typeof (data as { message?: unknown }).message === "string"
-          ? ((data as { message: string }).message ?? "Login failed")
-          : "Login failed";
-
+    const passwordError = validatePassword(password);
+    if (passwordError) {
       return NextResponse.json(
-        { success: false, error: errorMessage },
-        { status: mantaRes.status },
+        { success: false, error: passwordError },
+        { status: 400 },
       );
     }
 
-    const token = (data as { token?: unknown }).token;
-    if (typeof token !== "string" || !token) {
-      console.error("[login] Missing token in login response", { data });
+    // Get user from Supabase using admin client (bypasses RLS)
+    const { data: userProfile, error: userError } = (await supabaseAdmin
+      .from("users")
+      .select("*")
+      .eq("email", email.toLowerCase())
+      .single()) as any;
+
+    if (userError || !userProfile) {
       return NextResponse.json(
-        { success: false, error: "Login failed. Invalid server response." },
-        { status: 502 },
+        { success: false, error: "Invalid email or password" },
+        { status: 401 },
       );
     }
 
-    const profileRes = await manta.fetchAllRecords({
-      table: "tickly-auth",
-      where: { email },
-      list: 1,
-    });
+    // Verify password
+    const isPasswordValid = verifyPassword(password, userProfile.password_hash);
+    if (!isPasswordValid) {
+      return NextResponse.json(
+        { success: false, error: "Invalid email or password" },
+        { status: 401 },
+      );
+    }
 
-    const userProfile =
-      profileRes.status && profileRes.data.length > 0
-        ? profileRes.data[0]
-        : null;
-    const userFromResponse = (data as { user?: Record<string, unknown> }).user;
-    const userRole = normalizeRole(
-      userProfile?.role ||
-        (userFromResponse?.role as string | undefined) ||
-        ((data as { role?: string }).role ?? undefined),
+    // Create JWT payload (can be extended later with real JWT library)
+    const tokenPayload = {
+      sub: userProfile.id,
+      email: userProfile.email,
+      role: userProfile.role,
+      iat: Math.floor(Date.now() / 1000),
+      exp: Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60, // 7 days
+    };
+
+    // For now, we'll use a simple base64url encoded JWT representation
+    // In production, use the jsonwebtoken package
+    const token = Buffer.from(JSON.stringify(tokenPayload)).toString(
+      "base64url",
     );
-    const userId = userProfile?.id || userProfile?.user_id || email;
-    const fullName =
-      userProfile?.fullName || userProfile?.fullname
-        ? userProfile.fullName || userProfile.fullname
-        : userProfile?.first_name
-          ? `${userProfile.first_name} ${userProfile.last_name || ""}`.trim()
-          : data.fullName || email;
 
     const response = NextResponse.json({
       success: true,
       session: {
         user: {
-          id: userId,
-          email: email,
-          fullName,
-          role: userRole,
+          id: userProfile.id,
+          email: userProfile.email,
+          fullName: userProfile.full_name,
+          role: userProfile.role,
         },
       },
     });
@@ -143,10 +127,10 @@ export async function POST(req: Request) {
     });
 
     const sessionCookieValue = encodeSessionCookie({
-      id: userId,
-      email,
-      fullName,
-      role: userRole,
+      id: userProfile.id,
+      email: userProfile.email,
+      fullName: userProfile.full_name,
+      role: userProfile.role,
     });
 
     if (sessionCookieValue) {
