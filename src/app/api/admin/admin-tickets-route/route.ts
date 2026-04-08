@@ -1,39 +1,32 @@
 import { NextResponse } from "next/server";
-import { manta } from "@/lib/manta-client";
-import { resolveTicketTable } from "@/lib/ticket-table-resolver";
-import { isTicketDeletedByAdmin } from "@/lib/ticket-soft-delete";
+import { createClient } from "@supabase/supabase-js";
 import { getRequestSessionUser } from "@/lib/server-session";
-import { resolvePublicTicketNumber } from "@/lib/ticket-number";
-import { sortByCreatedAtDesc } from "@/lib/sort-utils";
 
-function mapTicketRecord(record: Record<string, unknown>) {
-  const internalNotes =
-    (record.internalNotes as string) ||
-    (record.internal_notes as string) ||
-    "";
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL || "",
+  process.env.SUPABASE_SERVICE_KEY || "",
+);
 
+function mapTicketRecord(
+  ticket: Record<string, any>,
+  user: { full_name: string; email: string } | null,
+) {
   return {
-    id: (record.id as string) || (record._id as string) || "",
-    ticketId: resolvePublicTicketNumber(record),
-    title: (record.title as string) || "",
-    description: (record.description as string) || "",
-    priority: (record.priority as string) || "medium",
-    status: (record.status as string) || "open",
-    userId:
-      (record.userId as string) ||
-      (record.user_id as string) ||
-      "",
-    createdAt:
-      (record.createdAt as string) ||
-      (record.created_at as string) ||
-      "",
-    updatedAt:
-      (record.updatedAt as string) ||
-      (record.updated_at as string) ||
-      "",
-    internalNotes,
-    deletedByAdmin: isTicketDeletedByAdmin(internalNotes),
-    user: (record.user as Record<string, unknown> | undefined) || null,
+    id: ticket.id,
+    title: ticket.title,
+    description: ticket.description,
+    priority: ticket.priority || "medium",
+    status: ticket.status || "open",
+    userId: ticket.user_id || "",
+    createdAt: ticket.created_at,
+    updatedAt: ticket.updated_at,
+    internalNotes: ticket.internal_notes || "",
+    user: user
+      ? {
+          fullName: user.full_name,
+          email: user.email,
+        }
+      : null,
   };
 }
 
@@ -54,91 +47,61 @@ export async function GET() {
       );
     }
 
-    let ticketTable: string;
-    try {
-      ticketTable = await resolveTicketTable();
-    } catch (err: unknown) {
-      const message =
-        err instanceof Error ? err.message : "Ticket table not accessible";
-      console.error("[admin-tickets][GET] resolveTicketTable failed:", message);
+    // Fetch all tickets from Supabase
+    const { data: tickets, error: ticketsError } = await supabase
+      .from("support_tickets")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (ticketsError) {
+      console.error(
+        "[admin-tickets][GET] Error fetching tickets:",
+        ticketsError,
+      );
       return NextResponse.json(
-        { success: false, error: message },
+        { success: false, error: ticketsError.message },
         { status: 500 },
       );
     }
 
-    let response: { data?: unknown[] };
-    try {
-      response = await manta.fetchAllRecords({
-        table: ticketTable,
-        orderBy: "createdAt",
-        order: "desc",
-      });
-    } catch (err: unknown) {
-      const message =
-        err instanceof Error ? err.message : "Failed to fetch from Manta";
-      console.error("[admin-tickets][GET] fetchAllRecords failed:", message);
-      return NextResponse.json(
-        { success: false, error: `Failed to fetch tickets: ${message}` },
-        { status: 500 },
-      );
-    }
-
-    const mappedTickets = Array.isArray(response.data)
-      ? response.data.map((record) =>
-          mapTicketRecord(record as Record<string, unknown>),
-        )
-      : [];
-
-    // Enrich with user display names
+    // Get unique user IDs from tickets
     const userIds = Array.from(
-      new Set(mappedTickets.map((t) => t.userId).filter(Boolean)),
+      new Set((tickets || []).map((t: any) => t.user_id).filter(Boolean)),
     );
 
-    const usersById = new Map<string, { fullName: string; email: string }>();
+    // Fetch user data
+    const usersById = new Map<string, { full_name: string; email: string }>();
 
-    await Promise.all(
-      userIds.map(async (userId) => {
-        try {
-          let userRes = await manta.fetchAllRecords({
-            table: "tickly-auth",
-            where: { id: userId },
-            list: 1,
+    if (userIds.length > 0) {
+      const { data: users, error: usersError } = await supabase
+        .from("users")
+        .select("id, full_name, email")
+        .in("id", userIds);
+
+      if (usersError) {
+        console.error("[admin-tickets][GET] Error fetching users:", usersError);
+        // Continue without user enrichment
+      } else if (users) {
+        users.forEach((user: any) => {
+          usersById.set(user.id, {
+            full_name: user.full_name || "Unknown User",
+            email: user.email,
           });
+        });
+      }
+    }
 
-          if (!userRes.status || userRes.data.length === 0) {
-            userRes = await manta.fetchAllRecords({
-              table: "tickly-auth",
-              where: { user_id: userId },
-              list: 1,
-            });
-          }
-
-          if (userRes.status && userRes.data.length > 0) {
-            const user = userRes.data[0] as {
-              fullName?: string;
-              fullname?: string;
-              email?: string;
-            };
-            usersById.set(userId, {
-              fullName: user.fullName || user.fullname || "Unknown User",
-              email: user.email || "",
-            });
-          }
-        } catch {
-          // non-fatal
-        }
-      }),
+    const mappedTickets = (tickets || []).map((ticket: any) =>
+      mapTicketRecord(ticket, usersById.get(ticket.user_id) || null),
     );
 
-    const tickets = sortByCreatedAtDesc(
-      mappedTickets.map((ticket) => ({
-        ...ticket,
-        user: usersById.get(ticket.userId) || null,
-      })),
-    );
-
-    return NextResponse.json({ success: true, tickets });
+    return NextResponse.json({
+      success: true,
+      tickets: mappedTickets.sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      ),
+    });
   } catch (error: unknown) {
     const message =
       error instanceof Error ? error.message : "Failed to fetch tickets";

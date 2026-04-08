@@ -110,14 +110,23 @@ export async function POST(req: Request) {
     const newTicket = await createTicket({
       title: (title as string).trim(),
       description: (description as string).trim(),
-      priority: (priority as string) || "medium",
+      priority: ((priority as string) || "medium") as
+        | "low"
+        | "medium"
+        | "high"
+        | "critical",
       status: "open",
       user_id: sessionUser.id,
       customer_email:
         typeof customerEmail === "string" ? customerEmail : sessionUser.email,
-      org_id: "00000000-0000-0000-0000-000000000000", // Will be updated to support organizations
-      project_id: "00000000-0000-0000-0000-000000000000", // Will be updated
+      organization_id: "00000000-0000-0000-0000-000000000000", // Default organization
+      project_id: null,
       public_token: Math.random().toString(36).substring(2, 15),
+      customer_name: null,
+      customer_phone: null,
+      company_name: null,
+      category: null,
+      internal_notes: "",
     });
 
     if (!newTicket) {

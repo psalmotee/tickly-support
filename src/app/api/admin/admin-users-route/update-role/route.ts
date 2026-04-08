@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
-import { manta } from "@/lib/manta-client";
+import { createClient } from "@supabase/supabase-js";
 import { getRequestSessionUser } from "@/lib/server-session";
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL || "",
+  process.env.SUPABASE_SERVICE_KEY || "",
+);
 
 export async function PATCH(req: Request) {
   try {
@@ -63,60 +68,19 @@ export async function PATCH(req: Request) {
     }
 
     const trimmedUserId = userId.trim();
-    const whereCandidates: Array<Record<string, string>> = [
-      { id: trimmedUserId },
-      { user_id: trimmedUserId },
-      { _id: trimmedUserId },
-    ];
 
-    const dataCandidates: Array<Record<string, string>> = [
-      { role: newRole },
-      { user_role: newRole },
-      { userRole: newRole },
-    ];
+    // Update user role in Supabase
+    const { error } = await supabase
+      .from("users")
+      .update({ role: newRole })
+      .eq("id", trimmedUserId);
 
-    let updated = false;
-    let lastError = "Failed to update role";
-
-    for (const where of whereCandidates) {
-      for (const data of dataCandidates) {
-        try {
-          const updateResponse = await manta.updateRecords({
-            table: "tickly-auth",
-            where,
-            data,
-          });
-
-          if (updateResponse.status) {
-            updated = true;
-            break;
-          }
-
-          lastError =
-            (updateResponse as { message?: string }).message || lastError;
-        } catch (error: unknown) {
-          const message =
-            error instanceof Error ? error.message : "Failed to update role";
-          lastError = message;
-
-          if (!message.toLowerCase().includes("unknown field")) {
-            continue;
-          }
-        }
-      }
-
-      if (updated) {
-        break;
-      }
-    }
-
-    if (!updated) {
+    if (error) {
+      console.error("[admin-users][update-role] Failed to update role", error);
       return NextResponse.json(
         {
           success: false,
-          error:
-            lastError ||
-            "Failed to update role. Verify tickly-auth table ID and role column names.",
+          error: `Failed to update role: ${error.message}`,
         },
         { status: 500 },
       );

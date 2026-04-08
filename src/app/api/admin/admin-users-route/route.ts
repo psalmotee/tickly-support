@@ -1,35 +1,11 @@
 import { NextResponse } from "next/server";
-import { manta } from "@/lib/manta-client";
-import type { FetchAllRecordsParams } from "mantahq-sdk/dist/types/api";
+import { createClient } from "@supabase/supabase-js";
 import { getRequestSessionUser } from "@/lib/server-session";
 
-interface QueryMeta {
-  page: number;
-  list: number;
-  total: number;
-  totalPages: number;
-}
-
-interface RawUserRecord {
-  id?: string;
-  user_id?: string;
-  _id?: string;
-  email?: string;
-  fullName?: string;
-  fullname?: string;
-  first_name?: string;
-  last_name?: string;
-  role?: "admin" | "user";
-}
-
-function normalizeRole(role?: string): "admin" | "user" {
-  const value = role?.toLowerCase().trim();
-  if (value === "admin" || value === "amin" || value === "administrator") {
-    return "admin";
-  }
-
-  return "user";
-}
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL || "",
+  process.env.SUPABASE_SERVICE_KEY || "",
+);
 
 export async function GET(req: Request) {
   const sessionUser = await getRequestSessionUser();
@@ -52,48 +28,58 @@ export async function GET(req: Request) {
   const page = Number.isNaN(rawPage) || rawPage < 1 ? 1 : rawPage;
   const query = searchParams.get("query") || "";
   const limit = 10;
+  const offset = (page - 1) * limit;
 
   try {
-    const options: FetchAllRecordsParams = {
-      table: "tickly-auth",
-      fields: ["id", "fullname", "email", "role"],
-      page,
-      list: limit,
-    };
+    let countQuery = supabase.from("users").select("*", { count: "exact" });
+    let dataQuery = supabase
+      .from("users")
+      .select("id, email, full_name, role")
+      .order("created_at", { ascending: false })
+      .range(offset, offset + limit - 1);
 
     if (query) {
-      options.search = {
-        columns: ["fullname", "email"],
-        query,
-      };
+      const searchTerm = `%${query}%`;
+      countQuery = countQuery.or(
+        `email.ilike.${searchTerm},full_name.ilike.${searchTerm}`,
+      );
+      dataQuery = dataQuery.or(
+        `email.ilike.${searchTerm},full_name.ilike.${searchTerm}`,
+      );
     }
 
-    const response = (await manta.fetchAllRecords(options)) as {
-      status: boolean;
-      data: RawUserRecord[];
-      meta?: QueryMeta;
-    };
+    const { count: total } = await countQuery;
+    const { data: userData, error } = await dataQuery;
 
-    const users = (response.data || []).map((user) => ({
-      id: user.id || user.user_id || "",
-      email: user.email || "",
-      fullName:
-        user.fullName ||
-        user.fullname ||
-        (user.first_name
-          ? `${user.first_name} ${user.last_name || ""}`.trim()
-          : ""),
-      role: normalizeRole(user.role),
+    if (error) {
+      console.error("[admin-users][GET] Error:", error);
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: 500 },
+      );
+    }
+
+    const users = (userData || []).map((user) => ({
+      id: user.id,
+      email: user.email,
+      fullName: user.full_name || "Unknown User",
+      role: user.role,
     }));
 
     return NextResponse.json({
       success: true,
       users,
-      meta: response.meta ?? null,
+      meta: {
+        page,
+        limit,
+        total: total || 0,
+        totalPages: Math.ceil((total || 0) / limit),
+      },
     });
   } catch (error: unknown) {
     const message =
       error instanceof Error ? error.message : "Failed to fetch users";
+    console.error("[admin-users][GET] Error:", message);
     return NextResponse.json(
       { success: false, error: message },
       { status: 500 },

@@ -1,15 +1,28 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { manta } from "@/lib/manta-client";
-import { resolveTicketTable } from "@/lib/ticket-table-resolver";
-import { markTicketDeletedByAdmin } from "@/lib/ticket-soft-delete";
+import { createClient } from "@supabase/supabase-js";
 import { getRequestSessionUser } from "@/lib/server-session";
-import { resolvePublicTicketNumber } from "@/lib/ticket-number";
-import {
-  allowedTransitions,
-  canTransitionStatus,
-  normalizeIncomingStatus,
-} from "@/lib/ticket-rules";
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL || "",
+  process.env.SUPABASE_SERVICE_KEY || "",
+);
+
+const VALID_STATUSES = ["open", "in_progress", "resolved", "closed"];
+
+function canTransitionStatus(
+  currentStatus: string,
+  newStatus: string,
+): boolean {
+  const transitions: Record<string, string[]> = {
+    open: ["in_progress", "resolved", "closed"],
+    in_progress: ["open", "resolved", "closed"],
+    resolved: ["open", "in_progress"],
+    closed: ["open"],
+  };
+
+  return transitions[currentStatus]?.includes(newStatus) ?? false;
+}
 
 export async function GET(
   _req: NextRequest,
@@ -32,80 +45,55 @@ export async function GET(
     }
 
     const { ticketId } = await context.params;
-    const ticketTable = await resolveTicketTable();
 
-    let ticket: ({ userId?: string } & Record<string, unknown>) | null = null;
-    const whereCandidates: Array<Record<string, string>> = [
-      { id: ticketId },
-      { ticket_id: ticketId },
-    ];
+    // Fetch ticket from Supabase
+    const { data: ticket, error: ticketError } = await supabase
+      .from("support_tickets")
+      .select("*")
+      .eq("id", ticketId)
+      .single();
 
-    for (const where of whereCandidates) {
-      const response = await manta.fetchAllRecords({
-        table: ticketTable,
-        where,
-        list: 1,
-      });
-
-      if (response.status && response.data.length > 0) {
-        ticket = response.data[0] as { userId?: string } & Record<
-          string,
-          unknown
-        >;
-        break;
-      }
-    }
-
-    if (!ticket) {
+    if (ticketError || !ticket) {
+      console.error("[admin-tickets][GET] Error fetching ticket:", ticketError);
       return NextResponse.json(
         { success: false, error: "Ticket not found" },
         { status: 404 },
       );
     }
 
-    const ticketUserId =
-      (ticket.userId as string) ||
-      (ticket.user_id as string) ||
-      (ticket.userid as string) ||
-      undefined;
+    // Fetch user data if ticket has a user_id
+    let user = null;
+    if (ticket.user_id) {
+      const { data: userData } = await supabase
+        .from("users")
+        .select("id, full_name, email, role")
+        .eq("id", ticket.user_id)
+        .single();
 
-    ticket.userId = ticketUserId;
-    ticket.ticketId = resolvePublicTicketNumber(ticket);
-    ticket.createdAt =
-      (ticket.createdAt as string) || (ticket.created_at as string) || "";
-    ticket.updatedAt =
-      (ticket.updatedAt as string) ||
-      (ticket.updated_at as string) ||
-      (ticket.createdAt as string);
-    ticket.internalNotes =
-      (ticket.internalNotes as string) ||
-      (ticket.internal_notes as string) ||
-      "";
-
-    if (ticketUserId) {
-      const userRes = await manta.fetchAllRecords({
-        table: "tickly-auth",
-        where: { id: ticketUserId },
-        list: 1,
-      });
-
-      if (userRes.status && userRes.data.length > 0) {
-        const user = userRes.data[0] as {
-          fullname?: string;
-          fullName?: string;
-          email?: string;
-          role?: string;
-        };
-
-        ticket.users = {
-          fullName: user.fullName || user.fullname || "Unknown User",
-          email: user.email || "",
-          role: user.role || "user",
+      if (userData) {
+        user = {
+          fullName: userData.full_name,
+          email: userData.email,
+          role: userData.role,
         };
       }
     }
 
-    return NextResponse.json({ success: true, ticket });
+    return NextResponse.json({
+      success: true,
+      ticket: {
+        id: ticket.id,
+        title: ticket.title,
+        description: ticket.description,
+        priority: ticket.priority,
+        status: ticket.status,
+        userId: ticket.user_id,
+        createdAt: ticket.created_at,
+        updatedAt: ticket.updated_at,
+        internalNotes: ticket.internal_notes || "",
+        user,
+      },
+    });
   } catch (error: unknown) {
     console.error("[admin-tickets][GET] Failed to fetch ticket", { error });
     return NextResponse.json(
@@ -144,35 +132,20 @@ export async function POST(
     }
 
     const { ticketId } = await context.params;
-    const ticketTable = await resolveTicketTable();
 
-    const updateCandidates: Array<Record<string, unknown>> = [
-      { internal_notes: note, updated_at: new Date().toISOString() },
-      { internal_notes: note, updatedAt: new Date().toISOString() },
-      { internalNotes: note },
-      { internal_notes: note },
-    ];
+    // Update ticket internal notes
+    const { error } = await supabase
+      .from("support_tickets")
+      .update({
+        internal_notes: note,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", ticketId);
 
-    let updated = false;
-
-    for (const candidate of updateCandidates) {
-      try {
-        const result = await manta.updateRecords({
-          table: ticketTable,
-          where: { id: ticketId },
-          data: candidate,
-        });
-
-        if (result.status) {
-          updated = true;
-          break;
-        }
-      } catch {}
-    }
-
-    if (!updated) {
+    if (error) {
+      console.error("[admin-tickets][POST] Failed to save note", error);
       return NextResponse.json(
-        { error: "Failed to save note" },
+        { success: false, error: "Failed to save note" },
         { status: 500 },
       );
     }
@@ -223,144 +196,81 @@ export async function PATCH(
     }
 
     const { status, softDelete } = body as {
-      status?: "open" | "in-progress" | "closed";
+      status?: string;
       softDelete?: boolean;
     };
 
-    const ticketTable = await resolveTicketTable();
+    // Fetch current ticket
+    const { data: ticket, error: fetchError } = await supabase
+      .from("support_tickets")
+      .select("*")
+      .eq("id", ticketId)
+      .single();
 
-    const whereCandidates: Array<Record<string, string>> = [
-      { id: ticketId },
-      { ticket_id: ticketId },
-    ];
-
-    let existingTicket: Record<string, unknown> | null = null;
-
-    for (const where of whereCandidates) {
-      const ticketRes = await manta.fetchAllRecords({
-        table: ticketTable,
-        where,
-        list: 1,
-      });
-
-      if (ticketRes.status && ticketRes.data.length > 0) {
-        existingTicket = ticketRes.data[0] as Record<string, unknown>;
-        break;
-      }
-    }
-
-    if (!existingTicket) {
+    if (fetchError || !ticket) {
       return NextResponse.json(
         { success: false, error: "Ticket not found" },
         { status: 404 },
       );
     }
-    const existingNotes =
-      (existingTicket.internal_notes as string) ||
-      (existingTicket.internalNotes as string) ||
-      "";
 
-    const currentStatus =
-      normalizeIncomingStatus(existingTicket.status) || "open";
-    const normalizedRequestedStatus =
-      status === undefined ? undefined : normalizeIncomingStatus(status);
+    const currentStatus = ticket.status || "open";
 
-    if (status !== undefined && !normalizedRequestedStatus) {
-      return NextResponse.json(
-        { success: false, error: "Invalid status value" },
-        { status: 400 },
-      );
-    }
+    // Check status transition if provided
+    if (status) {
+      const normalizedStatus = status.toLowerCase();
 
-    if (
-      normalizedRequestedStatus &&
-      !canTransitionStatus(currentStatus, normalizedRequestedStatus)
-    ) {
-      const allowed = allowedTransitions(currentStatus);
-      return NextResponse.json(
-        {
-          success: false,
-          error: `Invalid status transition: ${currentStatus} -> ${normalizedRequestedStatus}. Allowed next statuses: ${allowed.join(", ") || "none"}`,
-        },
-        { status: 400 },
-      );
-    }
+      if (!VALID_STATUSES.includes(normalizedStatus)) {
+        return NextResponse.json(
+          { success: false, error: "Invalid status value" },
+          { status: 400 },
+        );
+      }
 
-    const statusCandidates = status
-      ? Array.from(
-          new Set([
-            normalizedRequestedStatus,
-            normalizedRequestedStatus === "in-progress"
-              ? "in_progress"
-              : normalizedRequestedStatus,
-            normalizedRequestedStatus === "closed"
-              ? "resolved"
-              : normalizedRequestedStatus,
-          ]),
-        )
-      : [undefined];
-
-    const notesValue = softDelete
-      ? markTicketDeletedByAdmin(existingNotes)
-      : undefined;
-
-    const payloadCandidates: Record<string, unknown>[] = [];
-
-    for (const statusValue of statusCandidates) {
-      payloadCandidates.push({
-        ...(statusValue ? { status: statusValue } : {}),
-        ...(notesValue !== undefined ? { internal_notes: notesValue } : {}),
-        updated_at: new Date().toISOString(),
-      });
-      payloadCandidates.push({
-        ...(statusValue ? { status: statusValue } : {}),
-        ...(notesValue !== undefined ? { internal_notes: notesValue } : {}),
-        updatedAt: new Date().toISOString(),
-      });
-      payloadCandidates.push({
-        ...(statusValue ? { status: statusValue } : {}),
-        ...(notesValue !== undefined ? { internalNotes: notesValue } : {}),
-      });
-      payloadCandidates.push({
-        ...(statusValue ? { status: statusValue } : {}),
-        ...(notesValue !== undefined ? { internal_notes: notesValue } : {}),
-      });
-    }
-
-    let updated = false;
-    let lastError = "Failed to update ticket";
-
-    for (const candidate of payloadCandidates) {
-      if (Object.keys(candidate).length === 0) continue;
-
-      try {
-        const result = await manta.updateRecords({
-          table: ticketTable,
-          where:
-            existingTicket.id && typeof existingTicket.id === "string"
-              ? { id: existingTicket.id }
-              : { ticket_id: ticketId },
-          data: candidate,
-        });
-
-        if (result.status) {
-          updated = true;
-          break;
-        }
-      } catch (error: unknown) {
-        const message =
-          error instanceof Error ? error.message : "Failed to update ticket";
-        lastError = message;
-
-        if (!message.includes("Unknown field")) {
-          break;
-        }
+      if (!canTransitionStatus(currentStatus, normalizedStatus)) {
+        const transitions: Record<string, string[]> = {
+          open: ["in_progress", "resolved", "closed"],
+          in_progress: ["open", "resolved", "closed"],
+          resolved: ["open", "in_progress"],
+          closed: ["open"],
+        };
+        const allowed = transitions[currentStatus] || [];
+        return NextResponse.json(
+          {
+            success: false,
+            error: `Invalid status transition: ${currentStatus} -> ${normalizedStatus}. Allowed: ${allowed.join(", ") || "none"}`,
+          },
+          { status: 400 },
+        );
       }
     }
 
-    if (!updated) {
+    // Prepare update payload
+    const updatePayload: Record<string, any> = {
+      updated_at: new Date().toISOString(),
+    };
+
+    if (status) {
+      updatePayload.status = status.toLowerCase();
+    }
+
+    if (softDelete) {
+      const currentNotes = ticket.internal_notes || "";
+      updatePayload.internal_notes = currentNotes.includes("[DELETED BY ADMIN]")
+        ? currentNotes
+        : `[DELETED BY ADMIN] ${currentNotes}`;
+    }
+
+    // Update ticket
+    const { error } = await supabase
+      .from("support_tickets")
+      .update(updatePayload)
+      .eq("id", ticketId);
+
+    if (error) {
+      console.error("[admin-tickets][PATCH] Failed to update ticket", error);
       return NextResponse.json(
-        { success: false, error: lastError },
+        { success: false, error: "Failed to update ticket" },
         { status: 500 },
       );
     }
