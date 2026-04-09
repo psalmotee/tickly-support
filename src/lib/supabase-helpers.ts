@@ -1167,6 +1167,336 @@ export async function createCustomerTicket(
   }
 }
 
+// ====== CUSTOMER MANAGEMENT (Phase 5) ======
+
+export async function getOrganizationCustomers(
+  organizationId: string,
+  options?: {
+    limit?: number;
+    offset?: number;
+    sortBy?: "created_at" | "name" | "email";
+    order?: "asc" | "desc";
+  },
+): Promise<(CustomerRecord & { ticket_count: number })[]> {
+  try {
+    const limit = options?.limit || 50;
+    const offset = options?.offset || 0;
+    const sortBy = options?.sortBy || "created_at";
+    const order = options?.order || "desc";
+
+    const { data, error } = await supabase
+      .from("customers")
+      .select("*, support_tickets(count)")
+      .eq("organization_id", organizationId)
+      .eq("is_active", true)
+      .order(sortBy, { ascending: order === "asc" })
+      .range(offset, offset + limit - 1);
+
+    if (error) throw error;
+
+    return (data || []).map((customer: any) => ({
+      ...customer,
+      ticket_count: customer.support_tickets?.[0]?.count || 0,
+    }));
+  } catch (error) {
+    console.error("Error fetching organization customers:", error);
+    return [];
+  }
+}
+
+export async function searchCustomers(
+  organizationId: string,
+  query: string,
+): Promise<CustomerRecord[]> {
+  try {
+    const { data, error } = await supabase
+      .from("customers")
+      .select("*")
+      .eq("organization_id", organizationId)
+      .eq("is_active", true)
+      .or(`full_name.ilike.%${query}%,email.ilike.%${query}%`);
+
+    if (error) throw error;
+    return (data || []) as CustomerRecord[];
+  } catch (error) {
+    console.error("Error searching customers:", error);
+    return [];
+  }
+}
+
+export async function getCustomerWithTickets(
+  customerId: string,
+): Promise<(CustomerRecord & { tickets: TicketRecord[] }) | null> {
+  try {
+    const { data: customer, error: customerError } = await supabase
+      .from("customers")
+      .select("*")
+      .eq("id", customerId)
+      .single();
+
+    if (customerError && customerError.code !== "PGRST116") throw customerError;
+    if (!customer) return null;
+
+    const { data: tickets, error: ticketsError } = await supabase
+      .from("support_tickets")
+      .select("*")
+      .eq("customer_id", customerId)
+      .order("created_at", { ascending: false });
+
+    if (ticketsError) throw ticketsError;
+
+    return {
+      ...(customer as CustomerRecord),
+      tickets: (tickets || []) as TicketRecord[],
+    };
+  } catch (error) {
+    console.error("Error fetching customer with tickets:", error);
+    return null;
+  }
+}
+
+export async function updateCustomer(
+  customerId: string,
+  updates: Partial<
+    Omit<CustomerRecord, "id" | "organization_id" | "created_at" | "updated_at">
+  >,
+): Promise<CustomerRecord | null> {
+  try {
+    const { data, error } = await supabase
+      .from("customers")
+      .update(updates)
+      .eq("id", customerId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data as CustomerRecord;
+  } catch (error) {
+    console.error("Error updating customer:", error);
+    return null;
+  }
+}
+
+export interface CustomerNoteRecord {
+  id: string;
+  customer_id: string;
+  created_by_id: string;
+  note: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function addCustomerNote(
+  customerId: string,
+  userId: string,
+  note: string,
+): Promise<CustomerNoteRecord | null> {
+  try {
+    const { data, error } = await supabase
+      .from("customer_notes")
+      .insert([
+        {
+          customer_id: customerId,
+          created_by_id: userId,
+          note: note.trim(),
+        },
+      ])
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data as CustomerNoteRecord;
+  } catch (error) {
+    console.error("Error adding customer note:", error);
+    return null;
+  }
+}
+
+export async function getCustomerNotes(
+  customerId: string,
+): Promise<
+  (CustomerNoteRecord & { created_by?: { full_name: string; email: string } })[]
+> {
+  try {
+    const { data, error } = await supabase
+      .from("customer_notes")
+      .select("*, users(full_name, email)")
+      .eq("customer_id", customerId)
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+    return (data || []) as any[];
+  } catch (error) {
+    console.error("Error fetching customer notes:", error);
+    return [];
+  }
+}
+
+// ====== CUSTOMER TAGGING (Phase 5.2) ======
+
+export async function addTagToCustomer(
+  customerId: string,
+  tag: string,
+): Promise<boolean> {
+  try {
+    // Get current tags
+    const { data: customer, error: fetchError } = await supabase
+      .from("customers")
+      .select("tags")
+      .eq("id", customerId)
+      .single();
+
+    if (fetchError) throw fetchError;
+    if (!customer) return false;
+
+    const currentTags = (customer.tags as string[]) || [];
+    const normalizedTag = tag.toLowerCase().trim();
+
+    // Avoid duplicates
+    if (currentTags.includes(normalizedTag)) {
+      return true;
+    }
+
+    const newTags = [...currentTags, normalizedTag];
+
+    const { error: updateError } = await supabase
+      .from("customers")
+      .update({ tags: newTags })
+      .eq("id", customerId);
+
+    if (updateError) throw updateError;
+    return true;
+  } catch (error) {
+    console.error("Error adding tag to customer:", error);
+    return false;
+  }
+}
+
+export async function removeTagFromCustomer(
+  customerId: string,
+  tag: string,
+): Promise<boolean> {
+  try {
+    const { data: customer, error: fetchError } = await supabase
+      .from("customers")
+      .select("tags")
+      .eq("id", customerId)
+      .single();
+
+    if (fetchError) throw fetchError;
+    if (!customer) return false;
+
+    const currentTags = (customer.tags as string[]) || [];
+    const normalizedTag = tag.toLowerCase().trim();
+    const newTags = currentTags.filter((t) => t !== normalizedTag);
+
+    const { error: updateError } = await supabase
+      .from("customers")
+      .update({ tags: newTags })
+      .eq("id", customerId);
+
+    if (updateError) throw updateError;
+    return true;
+  } catch (error) {
+    console.error("Error removing tag from customer:", error);
+    return false;
+  }
+}
+
+export async function getCustomerTags(customerId: string): Promise<string[]> {
+  try {
+    const { data, error } = await supabase
+      .from("customers")
+      .select("tags")
+      .eq("id", customerId)
+      .single();
+
+    if (error && error.code !== "PGRST116") throw error;
+    return ((data?.tags as string[]) || []).sort();
+  } catch (error) {
+    console.error("Error fetching customer tags:", error);
+    return [];
+  }
+}
+
+export async function getCustomersWithTag(
+  organizationId: string,
+  tag: string,
+): Promise<(CustomerRecord & { tag_count: number })[]> {
+  try {
+    const normalizedTag = tag.toLowerCase().trim();
+
+    const { data, error } = await supabase
+      .from("customers")
+      .select("*, support_tickets(count)")
+      .eq("organization_id", organizationId)
+      .eq("is_active", true)
+      .contains("tags", [normalizedTag]);
+
+    if (error) throw error;
+
+    return (data || []).map((customer: any) => ({
+      ...customer,
+      tag_count: (customer.tags as string[])?.length || 0,
+    }));
+  } catch (error) {
+    console.error("Error fetching customers with tag:", error);
+    return [];
+  }
+}
+
+export async function getOrganizationTags(
+  organizationId: string,
+): Promise<{ tag: string; count: number }[]> {
+  try {
+    // Get all customers and their tags
+    const { data, error } = await supabase
+      .from("customers")
+      .select("tags")
+      .eq("organization_id", organizationId)
+      .eq("is_active", true);
+
+    if (error) throw error;
+
+    // Count occurrences of each tag
+    const tagCounts: Record<string, number> = {};
+    (data || []).forEach((customer: any) => {
+      const tags = (customer.tags as string[]) || [];
+      tags.forEach((tag) => {
+        tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+      });
+    });
+
+    // Convert to array and sort by count
+    return Object.entries(tagCounts)
+      .map(([tag, count]) => ({ tag, count }))
+      .sort((a, b) => b.count - a.count);
+  } catch (error) {
+    console.error("Error fetching organization tags:", error);
+    return [];
+  }
+}
+
+export async function bulkAddTagToCustomers(
+  customerIds: string[],
+  tag: string,
+): Promise<number> {
+  try {
+    let successCount = 0;
+    const normalizedTag = tag.toLowerCase().trim();
+
+    for (const customerId of customerIds) {
+      const success = await addTagToCustomer(customerId, normalizedTag);
+      if (success) successCount++;
+    }
+
+    return successCount;
+  } catch (error) {
+    console.error("Error bulk adding tag to customers:", error);
+    return 0;
+  }
+}
+
 // ====== DASHBOARD HELPERS ======
 
 export interface DashboardStats {

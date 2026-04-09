@@ -55,6 +55,12 @@ export function AdminDashboardHeader() {
                 Tickets
               </Link>
               <Link
+                href="/admin-dashboard/customers"
+                className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-foreground hover:bg-secondary transition-colors"
+              >
+                Customers
+              </Link>
+              <Link
                 href="/admin-dashboard/users-list"
                 className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-foreground hover:bg-secondary transition-colors"
               >
@@ -119,6 +125,12 @@ export function AdminDashboardHeader() {
                 className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-foreground hover:bg-secondary transition-colors"
               >
                 Tickets
+              </Link>
+              <Link
+                href="/admin-dashboard/customers"
+                className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-foreground hover:bg-secondary transition-colors"
+              >
+                Customers
               </Link>
               <Link
                 href="/admin-dashboard/users-list"
