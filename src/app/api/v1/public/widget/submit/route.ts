@@ -1,7 +1,15 @@
 // used
 import { NextRequest, NextResponse } from "next/server";
-import { getWebsiteByToken } from "@/lib/supabase-helpers";
-import { createWidgetTicket } from "@/lib/supabase-helpers";
+import {
+  getWebsiteByToken,
+  createWidgetTicket,
+  getOrganizationById,
+  getOrganizationMembers,
+} from "@/lib/supabase-helpers";
+import {
+  sendWidgetTicketConfirmation,
+  sendAdminWidgetNotification,
+} from "@/lib/email-service";
 
 export async function POST(request: NextRequest) {
   try {
@@ -63,6 +71,41 @@ export async function POST(request: NextRequest) {
         },
         { status: 500 },
       );
+    }
+
+    // Send emails in background (don't wait for response)
+    try {
+      // Get organization info
+      const org = await getOrganizationById(website.organization_id);
+      if (org) {
+        // Send confirmation email to customer
+        await sendWidgetTicketConfirmation(
+          { name: name.trim(), email: email.trim().toLowerCase() },
+          {
+            id: ticket.id,
+            title: ticket.title,
+            public_token: ticket.public_token || "",
+          },
+          { name: org.name },
+        );
+
+        // Send notification to admins
+        const members = await getOrganizationMembers(website.organization_id);
+        const adminMembers = members.filter(
+          (m) => m.role === "admin" && m.user?.email,
+        );
+        for (const admin of adminMembers) {
+          if (admin.user?.email) {
+            await sendAdminWidgetNotification(admin.user.email, ticket, {
+              name: org.name,
+              id: org.id,
+            });
+          }
+        }
+      }
+    } catch (emailError) {
+      console.error("Error sending notification emails:", emailError);
+      // Don't fail the request if emails fail - ticket was created successfully
     }
 
     return NextResponse.json(

@@ -1414,3 +1414,92 @@ export async function createWidgetTicket(
     return null;
   }
 }
+
+// ====== EMAIL NOTIFICATION PREFERENCES ======
+
+export interface EmailPreferencesRecord {
+  id: string;
+  organization_id: string;
+  user_id: string;
+  notify_new_tickets: boolean;
+  notify_assignment: boolean;
+  notify_status_changes: boolean;
+  notify_daily_digest: boolean;
+  digest_time: string; // "09:00" format
+  created_at: string;
+  updated_at: string;
+}
+
+export async function getUserEmailPreferences(
+  organizationId: string,
+  userId: string,
+): Promise<EmailPreferencesRecord | null> {
+  try {
+    const { data, error } = await supabase
+      .from("email_preferences")
+      .select("*")
+      .eq("organization_id", organizationId)
+      .eq("user_id", userId)
+      .single();
+
+    if (error && error.code !== "PGRST116") throw error;
+    return data as EmailPreferencesRecord | null;
+  } catch (error) {
+    console.error("Error fetching email preferences:", error);
+    return null;
+  }
+}
+
+export async function updateUserEmailPreferences(
+  organizationId: string,
+  userId: string,
+  preferences: Partial<
+    Omit<
+      EmailPreferencesRecord,
+      "id" | "organization_id" | "user_id" | "created_at" | "updated_at"
+    >
+  >,
+): Promise<EmailPreferencesRecord | null> {
+  try {
+    // Check if preferences exist
+    const existing = await getUserEmailPreferences(organizationId, userId);
+
+    if (existing) {
+      // Update
+      const { data, error } = await supabase
+        .from("email_preferences")
+        .update(preferences)
+        .eq("organization_id", organizationId)
+        .eq("user_id", userId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data as EmailPreferencesRecord;
+    } else {
+      // Create with defaults
+      const { data, error } = await supabase
+        .from("email_preferences")
+        .insert([
+          {
+            organization_id: organizationId,
+            user_id: userId,
+            notify_new_tickets: true,
+            notify_assignment: true,
+            notify_status_changes: true,
+            notify_daily_digest: false,
+            digest_time: "09:00",
+            ...preferences,
+          },
+        ])
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data as EmailPreferencesRecord;
+    }
+  } catch (error) {
+    console.error("Error updating email preferences:", error);
+    return null;
+  }
+}

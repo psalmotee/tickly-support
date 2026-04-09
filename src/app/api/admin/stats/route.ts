@@ -1,4 +1,4 @@
-
+// used
 import { NextRequest, NextResponse } from "next/server";
 import { getDashboardStats, getTicketsByStatus } from "@/lib/supabase-helpers";
 
