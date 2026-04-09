@@ -5,6 +5,8 @@ import {
   createWidgetTicket,
   getOrganizationById,
   getOrganizationMembers,
+  saveTicketCustomFieldValues,
+  type TicketRecord,
 } from "@/lib/supabase-helpers";
 import {
   sendWidgetTicketConfirmation,
@@ -15,7 +17,16 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    const { websiteId, name, email, phone, subject, message, priority } = body;
+    const {
+      websiteId,
+      name,
+      email,
+      phone,
+      subject,
+      message,
+      priority,
+      customFieldValues,
+    } = body;
 
     // Validate required fields
     if (!websiteId || !name || !email || !subject || !message) {
@@ -73,6 +84,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Save custom field values if provided
+    if (customFieldValues && Object.keys(customFieldValues).length > 0) {
+      try {
+        // Filter out empty values
+        const filteredValues: Record<string, string> = {};
+        for (const [fieldId, value] of Object.entries(customFieldValues)) {
+          if (value) {
+            filteredValues[fieldId] = String(value);
+          }
+        }
+
+        if (Object.keys(filteredValues).length > 0) {
+          await saveTicketCustomFieldValues(ticket.id, filteredValues);
+        }
+      } catch (fieldError) {
+        console.error("Error saving custom field values:", fieldError);
+        // Don't fail the request if field save fails - ticket was created
+      }
+    }
+
     // Send emails in background (don't wait for response)
     try {
       // Get organization info
@@ -96,10 +127,14 @@ export async function POST(request: NextRequest) {
         );
         for (const admin of adminMembers) {
           if (admin.user?.email) {
-            await sendAdminWidgetNotification(admin.user.email, ticket, {
-              name: org.name,
-              id: org.id,
-            });
+            await sendAdminWidgetNotification(
+              admin.user.email,
+              ticket as TicketRecord,
+              {
+                name: org.name,
+                id: org.id,
+              },
+            );
           }
         }
       }

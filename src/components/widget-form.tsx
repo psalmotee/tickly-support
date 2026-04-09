@@ -1,10 +1,22 @@
 // used
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+
+interface CustomField {
+  id: string;
+  name: string;
+  field_type: string;
+  label: string;
+  placeholder: string | null;
+  required: boolean;
+  options: string[] | null;
+  display_order: number;
+}
 
 interface WidgetFormProps {
   websiteId: string;
+  organizationId?: string;
   theme?: {
     primaryColor?: string;
     accentColor?: string;
@@ -15,6 +27,7 @@ interface WidgetFormProps {
 
 export function WidgetForm({
   websiteId,
+  organizationId,
   theme = {},
   onSubmitSuccess,
 }: WidgetFormProps) {
@@ -27,12 +40,49 @@ export function WidgetForm({
     priority: "medium" as const,
   });
 
+  const [customFields, setCustomFields] = useState<CustomField[]>([]);
+  const [customFieldValues, setCustomFieldValues] = useState<
+    Record<string, string>
+  >({});
+  const [loadingFields, setLoadingFields] = useState(false);
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState("");
 
   const primaryColor = theme.primaryColor || "#3b82f6";
   const fontFamily = theme.fontFamily || "system-ui, -apple-system, sans-serif";
+
+  // Load custom fields for the organization
+  useEffect(() => {
+    const loadCustomFields = async () => {
+      if (!organizationId) return;
+
+      try {
+        setLoadingFields(true);
+        const response = await fetch(
+          `/api/admin/organizations/${organizationId}/custom-fields`,
+        );
+
+        if (response.ok) {
+          const data = await response.json();
+          setCustomFields(data.fields || []);
+
+          // Initialize custom field values
+          const initialValues: Record<string, string> = {};
+          (data.fields || []).forEach((field: CustomField) => {
+            initialValues[field.id] = "";
+          });
+          setCustomFieldValues(initialValues);
+        }
+      } catch (err) {
+        console.error("Failed to load custom fields:", err);
+      } finally {
+        setLoadingFields(false);
+      }
+    };
+
+    loadCustomFields();
+  }, [organizationId]);
 
   const handleChange = (
     e: React.ChangeEvent<
@@ -44,10 +94,115 @@ export function WidgetForm({
     setError("");
   };
 
+  const renderCustomField = (field: CustomField) => {
+    const value = customFieldValues[field.id] || "";
+    const inputStyle = {
+      width: "100%",
+      padding: "10px",
+      border: "1px solid #d1d5db",
+      borderRadius: "6px",
+      fontSize: "14px",
+      boxSizing: "border-box" as const,
+      fontFamily: "inherit",
+    };
+
+    const labelStyle = {
+      display: "block" as const,
+      marginBottom: "6px",
+      fontSize: "14px",
+      fontWeight: "500" as const,
+      color: "#374151",
+    };
+
+    if (field.field_type === "select") {
+      return (
+        <div key={field.id} style={{ marginBottom: "16px" }}>
+          <label style={labelStyle}>
+            {field.label}
+            {field.required && <span style={{ color: "#dc2626" }}> *</span>}
+          </label>
+          <select
+            value={value}
+            onChange={(e) =>
+              setCustomFieldValues({
+                ...customFieldValues,
+                [field.id]: e.target.value,
+              })
+            }
+            required={field.required}
+            style={inputStyle}
+          >
+            <option value="">Select {field.label.toLowerCase()}</option>
+            {field.options?.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+        </div>
+      );
+    }
+
+    if (field.field_type === "textarea") {
+      return (
+        <div key={field.id} style={{ marginBottom: "16px" }}>
+          <label style={labelStyle}>
+            {field.label}
+            {field.required && <span style={{ color: "#dc2626" }}> *</span>}
+          </label>
+          <textarea
+            value={value}
+            onChange={(e) =>
+              setCustomFieldValues({
+                ...customFieldValues,
+                [field.id]: e.target.value,
+              })
+            }
+            placeholder={field.placeholder || ""}
+            required={field.required}
+            rows={3}
+            style={{ ...inputStyle, resize: "vertical" as const }}
+          />
+        </div>
+      );
+    }
+
+    return (
+      <div key={field.id} style={{ marginBottom: "16px" }}>
+        <label style={labelStyle}>
+          {field.label}
+          {field.required && <span style={{ color: "#dc2626" }}> *</span>}
+        </label>
+        <input
+          type={field.field_type}
+          value={value}
+          onChange={(e) =>
+            setCustomFieldValues({
+              ...customFieldValues,
+              [field.id]: e.target.value,
+            })
+          }
+          placeholder={field.placeholder || ""}
+          required={field.required}
+          style={inputStyle}
+        />
+      </div>
+    );
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError("");
+
+    // Validate required custom fields
+    for (const field of customFields) {
+      if (field.required && !customFieldValues[field.id]?.trim()) {
+        setError(`${field.label} is required`);
+        setLoading(false);
+        return;
+      }
+    }
 
     try {
       const response = await fetch("/api/v1/public/widget/submit", {
@@ -58,6 +213,7 @@ export function WidgetForm({
         body: JSON.stringify({
           websiteId,
           ...formData,
+          customFieldValues,
         }),
       });
 
@@ -75,6 +231,12 @@ export function WidgetForm({
         message: "",
         priority: "medium",
       });
+
+      const resetCustomFields: Record<string, string> = {};
+      customFields.forEach((field) => {
+        resetCustomFields[field.id] = "";
+      });
+      setCustomFieldValues(resetCustomFields);
 
       if (onSubmitSuccess) {
         onSubmitSuccess();
@@ -317,6 +479,24 @@ export function WidgetForm({
               placeholder="Describe your issue in detail..."
             />
           </div>
+
+          {/* Custom Fields */}
+          {customFields.length > 0 && (
+            <div style={{ marginBottom: "16px" }}>
+              <h3
+                style={{
+                  marginTop: 0,
+                  marginBottom: "12px",
+                  fontSize: "14px",
+                  fontWeight: "600",
+                  color: primaryColor,
+                }}
+              >
+                Additional Information
+              </h3>
+              {customFields.map((field) => renderCustomField(field))}
+            </div>
+          )}
 
           {error && (
             <div

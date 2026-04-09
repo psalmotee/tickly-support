@@ -1,3 +1,4 @@
+// used
 "use client";
 
 import { useRouter } from "next/navigation";
@@ -59,6 +60,25 @@ export function AdminDashboardHeader() {
               >
                 Users
               </Link>
+              <div className="relative group">
+                <button className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-foreground hover:bg-secondary transition-colors">
+                  Settings
+                </button>
+                <div className="invisible group-hover:visible absolute right-0 mt-0 w-48 bg-card border border-border rounded-lg shadow-lg z-50">
+                  <Link
+                    href="/admin-dashboard/custom-fields"
+                    className="block w-full text-left px-4 py-2 text-sm text-foreground hover:bg-secondary transition-colors rounded-t-lg"
+                  >
+                    Custom Fields
+                  </Link>
+                  <Link
+                    href="/admin-dashboard/email-preferences"
+                    className="block w-full text-left px-4 py-2 text-sm text-foreground hover:bg-secondary transition-colors rounded-b-lg"
+                  >
+                    Email Preferences
+                  </Link>
+                </div>
+              </div>
             </nav>
 
             <div className="flex flex-col items-end">
@@ -106,6 +126,20 @@ export function AdminDashboardHeader() {
               >
                 Users
               </Link>
+              <div className="border-t border-border pt-2 mt-2">
+                <Link
+                  href="/admin-dashboard/custom-fields"
+                  className="block px-3 py-2 text-sm font-medium text-foreground hover:bg-secondary transition-colors rounded-lg"
+                >
+                  Custom Fields
+                </Link>
+                <Link
+                  href="/admin-dashboard/email-preferences"
+                  className="block px-3 py-2 text-sm font-medium text-foreground hover:bg-secondary transition-colors rounded-lg"
+                >
+                  Email Preferences
+                </Link>
+              </div>
             </nav>
             <div className="px-2 py-2 border-t border-border">
               <p className="text-sm font-medium text-foreground">

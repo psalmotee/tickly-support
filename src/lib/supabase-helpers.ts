@@ -1503,3 +1503,178 @@ export async function updateUserEmailPreferences(
     return null;
   }
 }
+
+// ====== CUSTOM FIELDS ======
+
+export interface CustomFieldRecord {
+  id: string;
+  organization_id: string;
+  name: string;
+  field_type: "text" | "email" | "tel" | "number" | "select" | "textarea";
+  label: string;
+  placeholder: string | null;
+  required: boolean;
+  options: string[] | null; // For select fields
+  display_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TicketCustomFieldValue {
+  id: string;
+  ticket_id: string;
+  field_id: string;
+  value: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function getOrganizationCustomFields(
+  organizationId: string,
+): Promise<CustomFieldRecord[]> {
+  try {
+    const { data, error } = await supabase
+      .from("custom_fields")
+      .select("*")
+      .eq("organization_id", organizationId)
+      .eq("is_active", true)
+      .order("display_order", { ascending: true });
+
+    if (error) throw error;
+    return data as CustomFieldRecord[];
+  } catch (error) {
+    console.error("Error fetching custom fields:", error);
+    return [];
+  }
+}
+
+export async function createCustomField(
+  organizationId: string,
+  fieldData: Omit<
+    CustomFieldRecord,
+    "id" | "organization_id" | "created_at" | "updated_at"
+  >,
+): Promise<CustomFieldRecord | null> {
+  try {
+    const { data, error } = await supabase
+      .from("custom_fields")
+      .insert([
+        {
+          organization_id: organizationId,
+          ...fieldData,
+        },
+      ])
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data as CustomFieldRecord;
+  } catch (error) {
+    console.error("Error creating custom field:", error);
+    return null;
+  }
+}
+
+export async function updateCustomField(
+  fieldId: string,
+  updates: Partial<
+    Omit<
+      CustomFieldRecord,
+      "id" | "organization_id" | "created_at" | "updated_at"
+    >
+  >,
+): Promise<CustomFieldRecord | null> {
+  try {
+    const { data, error } = await supabase
+      .from("custom_fields")
+      .update(updates)
+      .eq("id", fieldId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data as CustomFieldRecord;
+  } catch (error) {
+    console.error("Error updating custom field:", error);
+    return null;
+  }
+}
+
+export async function deleteCustomField(fieldId: string): Promise<boolean> {
+  try {
+    // Soft delete
+    const { error } = await supabase
+      .from("custom_fields")
+      .update({ is_active: false })
+      .eq("id", fieldId);
+
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error("Error deleting custom field:", error);
+    return false;
+  }
+}
+
+export async function getTicketCustomFieldValues(
+  ticketId: string,
+): Promise<(TicketCustomFieldValue & { field?: CustomFieldRecord })[]> {
+  try {
+    const { data, error } = await supabase
+      .from("ticket_custom_field_values")
+      .select("*, custom_fields(*)")
+      .eq("ticket_id", ticketId);
+
+    if (error) throw error;
+    return data as (TicketCustomFieldValue & { field?: CustomFieldRecord })[];
+  } catch (error) {
+    console.error("Error fetching custom field values:", error);
+    return [];
+  }
+}
+
+export async function saveTicketCustomFieldValues(
+  ticketId: string,
+  values: Record<string, string>,
+): Promise<boolean> {
+  try {
+    // Get existing values
+    const { data: existing, error: fetchError } = await supabase
+      .from("ticket_custom_field_values")
+      .select("id, field_id")
+      .eq("ticket_id", ticketId);
+
+    if (fetchError) throw fetchError;
+
+    // Delete old values
+    if (existing && existing.length > 0) {
+      const { error: deleteError } = await supabase
+        .from("ticket_custom_field_values")
+        .delete()
+        .eq("ticket_id", ticketId);
+
+      if (deleteError) throw deleteError;
+    }
+
+    // Insert new values
+    const newValues = Object.entries(values).map(([fieldId, value]) => ({
+      ticket_id: ticketId,
+      field_id: fieldId,
+      value,
+    }));
+
+    if (newValues.length > 0) {
+      const { error: insertError } = await supabase
+        .from("ticket_custom_field_values")
+        .insert(newValues);
+
+      if (insertError) throw insertError;
+    }
+
+    return true;
+  } catch (error) {
+    console.error("Error saving custom field values:", error);
+    return false;
+  }
+}
