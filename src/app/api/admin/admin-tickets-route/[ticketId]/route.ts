@@ -2,6 +2,12 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getRequestSessionUser } from "@/lib/server-session";
+import {
+  getTicketById,
+  getCustomerById,
+  getWebsiteById,
+  updateTicket,
+} from "@/lib/supabase-helpers";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || "",
@@ -45,16 +51,10 @@ export async function GET(
     }
 
     const { ticketId } = await context.params;
+    const ticket = await getTicketById(ticketId);
 
-    // Fetch ticket from Supabase
-    const { data: ticket, error: ticketError } = await supabase
-      .from("support_tickets")
-      .select("*")
-      .eq("id", ticketId)
-      .single();
-
-    if (ticketError || !ticket) {
-      console.error("[admin-tickets][GET] Error fetching ticket:", ticketError);
+    if (!ticket) {
+      console.error("[admin-tickets][GET] Ticket not found:", ticketId);
       return NextResponse.json(
         { success: false, error: "Ticket not found" },
         { status: 404 },
@@ -79,6 +79,33 @@ export async function GET(
       }
     }
 
+    // Fetch customer data
+    let customer = null;
+    if (ticket.customer_id) {
+      customer = await getCustomerById(ticket.customer_id);
+      if (customer) {
+        customer = {
+          email: customer.email,
+          fullName: customer.full_name,
+          phone: customer.phone,
+          companyName: customer.company_name,
+        };
+      }
+    }
+
+    // Fetch website data
+    let website = null;
+    if (ticket.website_id) {
+      website = await getWebsiteById(ticket.website_id);
+      if (website) {
+        website = {
+          domain: website.domain,
+          name: website.name,
+          id: website.id,
+        };
+      }
+    }
+
     return NextResponse.json({
       success: true,
       ticket: {
@@ -88,10 +115,19 @@ export async function GET(
         priority: ticket.priority,
         status: ticket.status,
         userId: ticket.user_id,
+        customerId: ticket.customer_id,
+        websiteId: ticket.website_id,
+        sourceChannel: ticket.source_channel,
+        categoryId: ticket.category_id,
+        rating: ticket.rating,
+        publicToken: ticket.public_token,
         createdAt: ticket.created_at,
         updatedAt: ticket.updated_at,
+        resolvedAt: ticket.resolved_at,
         internalNotes: ticket.internal_notes || "",
         user,
+        customer,
+        website,
       },
     });
   } catch (error: unknown) {
@@ -195,19 +231,18 @@ export async function PATCH(
       );
     }
 
-    const { status, softDelete } = body as {
+    const { status, softDelete, rating, internalNotes, categoryId } = body as {
       status?: string;
       softDelete?: boolean;
+      rating?: number;
+      internalNotes?: string;
+      categoryId?: string | null;
     };
 
     // Fetch current ticket
-    const { data: ticket, error: fetchError } = await supabase
-      .from("support_tickets")
-      .select("*")
-      .eq("id", ticketId)
-      .single();
+    const ticket = await getTicketById(ticketId);
 
-    if (fetchError || !ticket) {
+    if (!ticket) {
       return NextResponse.json(
         { success: false, error: "Ticket not found" },
         { status: 404 },
@@ -246,12 +281,14 @@ export async function PATCH(
     }
 
     // Prepare update payload
-    const updatePayload: Record<string, any> = {
-      updated_at: new Date().toISOString(),
-    };
+    const updatePayload: Record<string, any> = {};
 
     if (status) {
       updatePayload.status = status.toLowerCase();
+      // Set resolved_at when marking as resolved
+      if (status.toLowerCase() === "resolved") {
+        updatePayload.resolved_at = new Date().toISOString();
+      }
     }
 
     if (softDelete) {
@@ -261,21 +298,30 @@ export async function PATCH(
         : `[DELETED BY ADMIN] ${currentNotes}`;
     }
 
-    // Update ticket
-    const { error } = await supabase
-      .from("support_tickets")
-      .update(updatePayload)
-      .eq("id", ticketId);
+    if (typeof rating === "number" && rating >= 0 && rating <= 5) {
+      updatePayload.rating = rating;
+    }
 
-    if (error) {
-      console.error("[admin-tickets][PATCH] Failed to update ticket", error);
+    if (typeof internalNotes === "string") {
+      updatePayload.internal_notes = internalNotes;
+    }
+
+    if (categoryId !== undefined) {
+      updatePayload.category_id = categoryId;
+    }
+
+    // Update ticket using helper function
+    const updatedTicket = await updateTicket(ticketId, updatePayload);
+
+    if (!updatedTicket) {
+      console.error("[admin-tickets][PATCH] Failed to update ticket");
       return NextResponse.json(
         { success: false, error: "Failed to update ticket" },
         { status: 500 },
       );
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, ticket: updatedTicket });
   } catch (error: unknown) {
     const message =
       error instanceof Error ? error.message : "Failed to update ticket";

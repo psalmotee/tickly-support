@@ -1,3 +1,5 @@
+// used
+
 "use client";
 
 import type React from "react";
@@ -15,6 +17,7 @@ export function SignupForm() {
   const { setSession } = useAuth();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
+  const [organizationName, setOrganizationName] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -46,11 +49,18 @@ export function SignupForm() {
       return;
     }
 
+    if (!organizationName.trim()) {
+      setFieldErrors({ organizationName: "Organization name is required" });
+      setIsLoading(false);
+      return;
+    }
+
     const signupResult = await signup(
       fullName,
       email,
       password,
       confirmPassword,
+      organizationName,
     );
 
     if (!signupResult.success) {
@@ -109,6 +119,34 @@ export function SignupForm() {
             {fieldErrors.name && (
               <p className="text-xs text-destructive mt-1">
                 {fieldErrors.name}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label
+              htmlFor="organizationName"
+              className="block text-sm font-medium text-foreground mb-2"
+            >
+              Organization name
+            </label>
+            <input
+              id="organizationName"
+              type="text"
+              value={organizationName}
+              onChange={(e) => setOrganizationName(e.target.value)}
+              placeholder="Acme Corp"
+              autoComplete="organization"
+              className={`w-full rounded-lg border px-4 py-2 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 ${
+                fieldErrors.organizationName
+                  ? "border-destructive bg-destructive/5"
+                  : "border-input bg-background"
+              }`}
+              disabled={isLoading}
+            />
+            {fieldErrors.organizationName && (
+              <p className="text-xs text-destructive mt-1">
+                {fieldErrors.organizationName}
               </p>
             )}
           </div>

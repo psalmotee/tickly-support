@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
+import { randomUUID } from "crypto";
 import {
   getUserTickets,
   createTicket,
   type TicketRecord,
+  createOrUpdateCustomer,
+  getOrganizationWebsites,
 } from "@/lib/supabase-helpers";
 import { getRequestSessionUser } from "@/lib/server-session";
 import { validateTicketCreateInput } from "@/lib/ticket-rules";
@@ -86,12 +89,14 @@ export async function POST(req: Request) {
       );
     }
 
-    const { title, description, priority, customerEmail } = body as {
-      title?: unknown;
-      description?: unknown;
-      priority?: unknown;
-      customerEmail?: unknown;
-    };
+    const { title, description, priority, customerEmail, organizationId } =
+      body as {
+        title?: unknown;
+        description?: unknown;
+        priority?: unknown;
+        customerEmail?: unknown;
+        organizationId?: unknown;
+      };
 
     const validationError = validateTicketCreateInput({
       title,
@@ -106,7 +111,22 @@ export async function POST(req: Request) {
       );
     }
 
-    // Create ticket in Supabase
+    // Use provided org ID or default
+    const orgId =
+      (organizationId as string) || "00000000-0000-0000-0000-000000000000";
+
+    // Get first website for this organization (can be passed by client later)
+    const websites = await getOrganizationWebsites(orgId);
+    const websiteId = websites.length > 0 ? websites[0].id : null;
+
+    // Create or get customer
+    const customerAddr =
+      typeof customerEmail === "string" ? customerEmail : sessionUser.email;
+    const customer = await createOrUpdateCustomer(orgId, customerAddr, {
+      full_name: sessionUser.fullName || customerAddr.split("@")[0],
+    });
+
+    // Create ticket with customer_id and website_id
     const newTicket = await createTicket({
       title: (title as string).trim(),
       description: (description as string).trim(),
@@ -117,15 +137,20 @@ export async function POST(req: Request) {
         | "critical",
       status: "open",
       user_id: sessionUser.id,
-      customer_email:
-        typeof customerEmail === "string" ? customerEmail : sessionUser.email,
-      organization_id: "00000000-0000-0000-0000-000000000000", // Default organization
+      customer_id: customer?.id || null,
+      customer_email: customerAddr,
+      website_id: websiteId,
+      source_channel: "manual",
+      organization_id: orgId,
       project_id: null,
-      public_token: Math.random().toString(36).substring(2, 15),
+      public_token: randomUUID(),
       customer_name: null,
       customer_phone: null,
       company_name: null,
       category: null,
+      category_id: null,
+      rating: null,
+      resolved_at: null,
       internal_notes: "",
     });
 

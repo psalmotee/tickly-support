@@ -1,3 +1,5 @@
+// used
+
 import type { AuthSession } from "./auth-client";
 
 export type AppRole = "admin" | "user";

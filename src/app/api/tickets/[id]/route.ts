@@ -1,74 +1,20 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { manta } from "@/lib/manta-client";
-import { resolveTicketTable } from "@/lib/ticket-table-resolver";
-import { getRequestSessionUser } from "@/lib/server-session";
-import { resolvePublicTicketNumber } from "@/lib/ticket-number";
 import {
-  normalizeIncomingStatus,
-  VALID_TICKET_PRIORITIES,
-} from "@/lib/ticket-rules";
+  getTicketById,
+  updateTicket,
+  getCustomerById,
+  getWebsiteById,
+} from "@/lib/supabase-helpers";
+import { getRequestSessionUser } from "@/lib/server-session";
+import { createClient } from "@supabase/supabase-js";
 
-function mapTicketRecord(record: Record<string, unknown>) {
-  const ticketId = resolvePublicTicketNumber(record);
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL || "",
+  process.env.SUPABASE_SERVICE_KEY || "",
+);
 
-  return {
-    id: (record.id as string) || (record._id as string) || ticketId,
-    ticketId,
-    title: (record.title as string) || "",
-    description: (record.description as string) || "",
-    priority: (record.priority as string) || "medium",
-    status: (record.status as string) || "open",
-    userId:
-      (record.userId as string) ||
-      (record.user_id as string) ||
-      (record.userid as string) ||
-      "",
-    createdAt:
-      (record.createdAt as string) || (record.created_at as string) || "",
-    updatedAt:
-      (record.updatedAt as string) ||
-      (record.updated_at as string) ||
-      (record.createdAt as string) ||
-      (record.created_at as string) ||
-      "",
-  };
-}
-
-async function findTicketById(ticketTable: string, id: string) {
-  const whereCandidates: Array<Record<string, string>> = [
-    { id },
-    { ticket_id: id },
-  ];
-
-  for (const where of whereCandidates) {
-    const response = await manta.fetchAllRecords({
-      table: ticketTable,
-      where,
-      list: 1,
-    });
-
-    if (response.status && response.data.length > 0) {
-      return response.data[0] as Record<string, unknown>;
-    }
-  }
-
-  return null;
-}
-
-function isOwnerOrAdmin(
-  sessionUserId: string,
-  sessionRole: string,
-  ticket: Record<string, unknown>,
-) {
-  const ticketOwnerId =
-    (ticket.user_id as string) ||
-    (ticket.userId as string) ||
-    (ticket.userid as string) ||
-    "";
-
-  return sessionRole === "admin" || ticketOwnerId === sessionUserId;
-}
+const VALID_TICKET_PRIORITIES = ["low", "medium", "high", "critical"];
 
 export async function GET(
   _req: NextRequest,
@@ -84,8 +30,7 @@ export async function GET(
     }
 
     const { id } = await context.params;
-    const ticketTable = await resolveTicketTable();
-    const ticket = await findTicketById(ticketTable, id);
+    const ticket = await getTicketById(id);
 
     if (!ticket) {
       return NextResponse.json(
@@ -94,16 +39,48 @@ export async function GET(
       );
     }
 
-    if (!isOwnerOrAdmin(sessionUser.id, sessionUser.role, ticket)) {
+    // Check if user owns this ticket or is admin
+    if (sessionUser.role !== "admin" && ticket.user_id !== sessionUser.id) {
       return NextResponse.json(
         { success: false, error: "Forbidden" },
         { status: 403 },
       );
     }
 
+    // Enrich with customer data
+    let customer = null;
+    if (ticket.customer_id) {
+      customer = await getCustomerById(ticket.customer_id);
+    }
+
+    // Enrich with website data
+    let website = null;
+    if (ticket.website_id) {
+      website = await getWebsiteById(ticket.website_id);
+    }
+
     return NextResponse.json({
       success: true,
-      ticket: mapTicketRecord(ticket),
+      ticket: {
+        id: ticket.id,
+        title: ticket.title,
+        description: ticket.description,
+        priority: ticket.priority,
+        status: ticket.status,
+        userId: ticket.user_id,
+        customerId: ticket.customer_id,
+        websiteId: ticket.website_id,
+        sourceChannel: ticket.source_channel,
+        categoryId: ticket.category_id,
+        rating: ticket.rating,
+        publicToken: ticket.public_token,
+        createdAt: ticket.created_at,
+        updatedAt: ticket.updated_at,
+        resolvedAt: ticket.resolved_at,
+        internalNotes: ticket.internal_notes,
+        customer,
+        website,
+      },
     });
   } catch (error: unknown) {
     console.error("[tickets][id][GET] Failed to fetch ticket", { error });
@@ -140,8 +117,7 @@ export async function PATCH(
     }
 
     const { id } = await context.params;
-    const ticketTable = await resolveTicketTable();
-    const ticket = await findTicketById(ticketTable, id);
+    const ticket = await getTicketById(id);
 
     if (!ticket) {
       return NextResponse.json(
@@ -150,32 +126,26 @@ export async function PATCH(
       );
     }
 
-    if (!isOwnerOrAdmin(sessionUser.id, sessionUser.role, ticket)) {
+    // Check if user owns this ticket or is admin
+    if (sessionUser.role !== "admin" && ticket.user_id !== sessionUser.id) {
       return NextResponse.json(
         { success: false, error: "Forbidden" },
         { status: 403 },
       );
     }
 
+    // Validate and extract fields
     const title =
       typeof body.title === "string" ? body.title.trim() : undefined;
     const description =
       typeof body.description === "string"
         ? body.description.trim()
         : undefined;
-    const status = normalizeIncomingStatus(body.status);
     const priority =
       typeof body.priority === "string" &&
-      (VALID_TICKET_PRIORITIES as readonly string[]).includes(body.priority)
+      VALID_TICKET_PRIORITIES.includes(body.priority)
         ? body.priority
         : undefined;
-
-    if (body.status !== undefined && !status) {
-      return NextResponse.json(
-        { success: false, error: "Invalid status value" },
-        { status: 400 },
-      );
-    }
 
     if (body.priority !== undefined && !priority) {
       return NextResponse.json(
@@ -187,7 +157,6 @@ export async function PATCH(
     if (
       title === undefined &&
       description === undefined &&
-      status === undefined &&
       priority === undefined
     ) {
       return NextResponse.json(
@@ -196,61 +165,23 @@ export async function PATCH(
       );
     }
 
-    const now = new Date().toISOString();
-    const updateCandidates: Array<Record<string, unknown>> = [
-      {
-        ...(title !== undefined ? { title } : {}),
-        ...(description !== undefined ? { description } : {}),
-        ...(status !== undefined ? { status } : {}),
-        ...(priority !== undefined ? { priority } : {}),
-        updated_at: now,
-      },
-      {
-        ...(title !== undefined ? { title } : {}),
-        ...(description !== undefined ? { description } : {}),
-        ...(status !== undefined ? { status } : {}),
-        ...(priority !== undefined ? { priority } : {}),
-        updatedAt: now,
-      },
-    ];
+    // Prepare update payload
+    const updatePayload: Record<string, any> = {};
+    if (title !== undefined) updatePayload.title = title;
+    if (description !== undefined) updatePayload.description = description;
+    if (priority !== undefined) updatePayload.priority = priority;
 
-    const where =
-      typeof ticket.id === "string" && ticket.id
-        ? { id: ticket.id }
-        : { ticket_id: id };
+    // Update ticket
+    const updatedTicket = await updateTicket(id, updatePayload);
 
-    let updated = false;
-    let lastError = "Failed to update ticket";
-
-    for (const data of updateCandidates) {
-      try {
-        const response = await manta.updateRecords({
-          table: ticketTable,
-          where,
-          data,
-        });
-
-        if (response.status) {
-          updated = true;
-          break;
-        }
-      } catch (error: unknown) {
-        lastError = error instanceof Error ? error.message : lastError;
-
-        if (!lastError.includes("Unknown field")) {
-          break;
-        }
-      }
-    }
-
-    if (!updated) {
+    if (!updatedTicket) {
       return NextResponse.json(
-        { success: false, error: lastError },
+        { success: false, error: "Failed to update ticket" },
         { status: 500 },
       );
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, ticket: updatedTicket });
   } catch (error: unknown) {
     console.error("[tickets][id][PATCH] Failed to update ticket", { error });
     return NextResponse.json(
@@ -274,8 +205,7 @@ export async function DELETE(
     }
 
     const { id } = await context.params;
-    const ticketTable = await resolveTicketTable();
-    const ticket = await findTicketById(ticketTable, id);
+    const ticket = await getTicketById(id);
 
     if (!ticket) {
       return NextResponse.json(
@@ -284,24 +214,24 @@ export async function DELETE(
       );
     }
 
-    if (!isOwnerOrAdmin(sessionUser.id, sessionUser.role, ticket)) {
+    // Check if user owns this ticket or is admin
+    if (sessionUser.role !== "admin" && ticket.user_id !== sessionUser.id) {
       return NextResponse.json(
         { success: false, error: "Forbidden" },
         { status: 403 },
       );
     }
 
-    const where =
-      typeof ticket.id === "string" && ticket.id
-        ? { id: ticket.id }
-        : { ticket_id: id };
-
-    const deleted = await manta.deleteRecords({
-      table: ticketTable,
-      where,
+    // Soft delete by updating internal notes
+    const currentNotes = ticket.internal_notes || "";
+    const updatedTicket = await updateTicket(id, {
+      internal_notes: currentNotes.includes("[DELETED BY USER]")
+        ? currentNotes
+        : `[DELETED BY USER] ${currentNotes}`,
+      status: "closed",
     });
 
-    if (!deleted.status) {
+    if (!updatedTicket) {
       return NextResponse.json(
         { success: false, error: "Failed to delete ticket" },
         { status: 500 },

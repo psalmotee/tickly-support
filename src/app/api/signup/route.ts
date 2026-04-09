@@ -1,10 +1,17 @@
+// used
+
 import { NextResponse } from "next/server";
 import {
   validateEmail,
   validatePassword,
   validateName,
 } from "@/lib/form-validation";
-import { getUserByEmail } from "@/lib/supabase-helpers";
+import {
+  getUserByEmail,
+  createOrganization,
+  createOrganizationMember,
+  createUser,
+} from "@/lib/supabase-helpers";
 import { hashPassword } from "@/lib/password-utils";
 import { supabaseAdmin } from "@/lib/supabase-client";
 
@@ -22,10 +29,11 @@ export async function POST(req: Request) {
       );
     }
 
-    const { fullName, email, password } = body as {
+    const { fullName, email, password, organizationName } = body as {
       fullName?: unknown;
       email?: unknown;
       password?: unknown;
+      organizationName?: unknown;
     };
 
     if (
@@ -38,6 +46,13 @@ export async function POST(req: Request) {
           success: false,
           error: "fullName, email, and password are required.",
         },
+        { status: 400 },
+      );
+    }
+
+    if (typeof organizationName !== "string" || !organizationName.trim()) {
+      return NextResponse.json(
+        { success: false, error: "organizationName is required." },
         { status: 400 },
       );
     }
@@ -63,6 +78,14 @@ export async function POST(req: Request) {
     if (passwordError) {
       return NextResponse.json(
         { success: false, error: passwordError },
+        { status: 400 },
+      );
+    }
+
+    const orgNameError = validateName(organizationName);
+    if (orgNameError) {
+      return NextResponse.json(
+        { success: false, error: `Organization name: ${orgNameError}` },
         { status: 400 },
       );
     }
@@ -101,7 +124,65 @@ export async function POST(req: Request) {
       );
     }
 
-    return NextResponse.json({ success: true });
+    // Create organization for the new user
+    const { data: newOrg, error: orgError } = await supabaseAdmin
+      .from("organizations")
+      .insert({
+        name: organizationName.trim(),
+        slug: generateUniqueSlugSync(organizationName),
+        owner_id: newUser.id,
+        is_active: true,
+      })
+      .select()
+      .single();
+
+    if (orgError || !newOrg) {
+      console.error("[signup] Failed to create organization", {
+        userId: newUser.id,
+        error: orgError,
+      });
+      return NextResponse.json(
+        { success: false, error: "Failed to create organization" },
+        { status: 500 },
+      );
+    }
+
+    // Create organization member entry (linking user to org as admin)
+    const { error: memberError } = await supabaseAdmin
+      .from("organization_members")
+      .insert({
+        organization_id: newOrg.id,
+        user_id: newUser.id,
+        role: "admin",
+      })
+      .select()
+      .single();
+
+    if (memberError) {
+      console.error("[signup] Failed to create organization membership", {
+        orgId: newOrg.id,
+        userId: newUser.id,
+        error: memberError,
+      });
+      return NextResponse.json(
+        { success: false, error: "Failed to set up organization access" },
+        { status: 500 },
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      user: {
+        id: newUser.id,
+        email: newUser.email,
+        fullName: newUser.full_name,
+      },
+      organization: {
+        id: newOrg.id,
+        name: newOrg.name,
+        slug: newOrg.slug,
+      },
+    });
   } catch (error) {
     console.error("[signup] Unexpected signup route error", { error });
     return NextResponse.json(
@@ -109,4 +190,17 @@ export async function POST(req: Request) {
       { status: 500 },
     );
   }
+}
+
+function generateUniqueSlugSync(name: string): string {
+  const slug = name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  // Note: This is synchronous and doesn't check uniqueness
+  // In production, use the async findUniqueSlug helper after user creation
+  // For now, append timestamp to ensure uniqueness
+  return `${slug}-${Date.now().toString(36)}`;
 }

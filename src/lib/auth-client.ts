@@ -1,3 +1,4 @@
+// used
 export interface AuthSession {
   user: {
     id: string;
@@ -48,12 +49,19 @@ export async function signup(
   email: string,
   password: string,
   confirm_password: string,
+  organizationName?: string,
 ) {
   try {
     const res = await fetch("/api/signup", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ fullName, email, password, confirm_password }),
+      body: JSON.stringify({
+        fullName,
+        email,
+        password,
+        confirm_password,
+        organizationName,
+      }),
     });
 
     return await parseResponse(res, "Signup failed");

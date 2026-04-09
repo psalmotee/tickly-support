@@ -7,10 +7,27 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY || "",
 );
 
+interface EnrichedTicket {
+  id: string;
+  title: string;
+  description: string;
+  priority?: string;
+  status?: string;
+  userId?: string;
+  createdAt: string;
+  updatedAt: string;
+  internalNotes?: string;
+  user?: { fullName: string; email: string } | null;
+  customer?: { email: string; fullName: string } | null;
+  website?: { domain: string; name: string } | null;
+}
+
 function mapTicketRecord(
   ticket: Record<string, any>,
   user: { full_name: string; email: string } | null,
-) {
+  customer: { email: string; fullName: string } | null,
+  website: { domain: string; name: string } | null,
+): EnrichedTicket {
   return {
     id: ticket.id,
     title: ticket.title,
@@ -27,6 +44,8 @@ function mapTicketRecord(
           email: user.email,
         }
       : null,
+    customer: customer,
+    website: website,
   };
 }
 
@@ -48,6 +67,7 @@ export async function GET() {
     }
 
     // Fetch all tickets from Supabase
+    // Note: For now, fetching all. Later can filter by organization using sessionUser's org
     const { data: tickets, error: ticketsError } = await supabase
       .from("support_tickets")
       .select("*")
@@ -64,9 +84,15 @@ export async function GET() {
       );
     }
 
-    // Get unique user IDs from tickets
+    // Get unique user IDs and customer IDs from tickets
     const userIds = Array.from(
       new Set((tickets || []).map((t: any) => t.user_id).filter(Boolean)),
+    );
+    const customerIds = Array.from(
+      new Set((tickets || []).map((t: any) => t.customer_id).filter(Boolean)),
+    );
+    const websiteIds = Array.from(
+      new Set((tickets || []).map((t: any) => t.website_id).filter(Boolean)),
     );
 
     // Fetch user data
@@ -91,8 +117,68 @@ export async function GET() {
       }
     }
 
+    // Fetch customer data
+    const customersById = new Map<
+      string,
+      { email: string; fullName: string }
+    >();
+
+    if (customerIds.length > 0) {
+      const { data: customers, error: customersError } = await supabase
+        .from("customers")
+        .select("id, email, full_name")
+        .in("id", customerIds);
+
+      if (customersError) {
+        console.error(
+          "[admin-tickets][GET] Error fetching customers:",
+          customersError,
+        );
+        // Continue without customer enrichment
+      } else if (customers) {
+        customers.forEach((customer: any) => {
+          customersById.set(customer.id, {
+            email: customer.email,
+            fullName: customer.full_name,
+          });
+        });
+      }
+    }
+
+    // Fetch website data
+    const websitesById = new Map<string, { domain: string; name: string }>();
+
+    if (websiteIds.length > 0) {
+      const { data: websites, error: websitesError } = await supabase
+        .from("websites")
+        .select("id, domain, name")
+        .in("id", websiteIds);
+
+      if (websitesError) {
+        console.error(
+          "[admin-tickets][GET] Error fetching websites:",
+          websitesError,
+        );
+        // Continue without website enrichment
+      } else if (websites) {
+        websites.forEach((website: any) => {
+          websitesById.set(website.id, {
+            domain: website.domain,
+            name: website.name,
+          });
+        });
+      }
+    }
+
     const mappedTickets = (tickets || []).map((ticket: any) =>
-      mapTicketRecord(ticket, usersById.get(ticket.user_id) || null),
+      mapTicketRecord(
+        ticket,
+        usersById.get(ticket.user_id) || null,
+        ticket.customer_id
+          ? customersById.get(ticket.customer_id) || null
+          : null,
+        ticket.website_id ? websitesById.get(ticket.website_id) || null : null,
+      ),
     );
 
     return NextResponse.json({
