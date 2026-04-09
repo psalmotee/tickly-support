@@ -2008,3 +2008,572 @@ export async function saveTicketCustomFieldValues(
     return false;
   }
 }
+
+// ====== EMAIL CAMPAIGNS ======
+
+export interface EmailCampaign {
+  id: string;
+  organization_id: string;
+  created_by: string;
+  campaign_name: string;
+  subject: string;
+  body: string;
+  target_type: "all" | "tag";
+  target_tag?: string;
+  status: "draft" | "scheduled" | "sent";
+  recipient_count: number;
+  sent_count: number;
+  created_at: string;
+  scheduled_at?: string;
+  sent_at?: string;
+}
+
+export interface EmailSendRecord {
+  id: string;
+  campaign_id: string;
+  customer_id: string;
+  customer_email: string;
+  status: "pending" | "sent" | "failed";
+  error_message?: string;
+  sent_at?: string;
+  created_at: string;
+}
+
+export async function createEmailCampaign(
+  organizationId: string,
+  userId: string,
+  campaignData: {
+    campaign_name: string;
+    subject: string;
+    body: string;
+    target_type: "all" | "tag";
+    target_tag?: string;
+  },
+): Promise<EmailCampaign | null> {
+  try {
+    // Get target recipients
+    let targetCustomers: CustomerRecord[] = [];
+
+    if (campaignData.target_type === "all") {
+      targetCustomers = await getOrganizationCustomers(organizationId, {
+        limit: 10000,
+      });
+    } else if (campaignData.target_type === "tag" && campaignData.target_tag) {
+      targetCustomers = await getCustomersWithTag(
+        organizationId,
+        campaignData.target_tag,
+      );
+    }
+
+    const recipientCount = targetCustomers.length;
+
+    const { data, error } = await supabase
+      .from("email_campaigns")
+      .insert({
+        organization_id: organizationId,
+        created_by: userId,
+        campaign_name: campaignData.campaign_name,
+        subject: campaignData.subject,
+        body: campaignData.body,
+        target_type: campaignData.target_type,
+        target_tag: campaignData.target_tag || null,
+        status: "draft",
+        recipient_count: recipientCount,
+        sent_count: 0,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data as EmailCampaign;
+  } catch (error) {
+    console.error("Error creating email campaign:", error);
+    return null;
+  }
+}
+
+export async function getOrganizationCampaigns(
+  organizationId: string,
+): Promise<EmailCampaign[]> {
+  try {
+    const { data, error } = await supabase
+      .from("email_campaigns")
+      .select("*")
+      .eq("organization_id", organizationId)
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+    return data as EmailCampaign[];
+  } catch (error) {
+    console.error("Error fetching campaigns:", error);
+    return [];
+  }
+}
+
+export async function getEmailCampaign(
+  campaignId: string,
+): Promise<EmailCampaign | null> {
+  try {
+    const { data, error } = await supabase
+      .from("email_campaigns")
+      .select("*")
+      .eq("id", campaignId)
+      .single();
+
+    if (error && error.code !== "PGRST116") throw error;
+    return data as EmailCampaign | null;
+  } catch (error) {
+    console.error("Error fetching campaign:", error);
+    return null;
+  }
+}
+
+export async function sendEmailCampaign(
+  campaignId: string,
+): Promise<{ success: boolean; sentCount: number; failedCount: number }> {
+  try {
+    const campaign = await getEmailCampaign(campaignId);
+    if (!campaign) {
+      throw new Error("Campaign not found");
+    }
+
+    // Get target recipients
+    let customers: CustomerRecord[] = [];
+
+    if (campaign.target_type === "all") {
+      customers = await getOrganizationCustomers(campaign.organization_id, {
+        limit: 10000,
+      });
+    } else if (campaign.target_type === "tag" && campaign.target_tag) {
+      customers = await getCustomersWithTag(
+        campaign.organization_id,
+        campaign.target_tag,
+      );
+    }
+
+    // Create send records (in production, this would queue actual email sends)
+    const sendRecords = customers.map((customer) => ({
+      campaign_id: campaignId,
+      customer_id: customer.id,
+      customer_email: customer.email,
+      status: "pending",
+      created_at: new Date().toISOString(),
+    }));
+
+    if (sendRecords.length > 0) {
+      const { error: insertError } = await supabase
+        .from("email_sends")
+        .insert(sendRecords);
+
+      if (insertError) throw insertError;
+    }
+
+    // Update campaign status
+    const { error: updateError } = await supabase
+      .from("email_campaigns")
+      .update({
+        status: "sent",
+        sent_count: customers.length,
+        sent_at: new Date().toISOString(),
+      })
+      .eq("id", campaignId);
+
+    if (updateError) throw updateError;
+
+    return {
+      success: true,
+      sentCount: customers.length,
+      failedCount: 0,
+    };
+  } catch (error) {
+    console.error("Error sending campaign:", error);
+    return {
+      success: false,
+      sentCount: 0,
+      failedCount: 0,
+    };
+  }
+}
+
+export async function updateEmailCampaignStatus(
+  campaignId: string,
+  status: "draft" | "scheduled" | "sent",
+  scheduledAt?: string,
+): Promise<boolean> {
+  try {
+    const updateData: any = { status };
+    if (scheduledAt) {
+      updateData.scheduled_at = scheduledAt;
+    }
+
+    const { error } = await supabase
+      .from("email_campaigns")
+      .update(updateData)
+      .eq("id", campaignId);
+
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error("Error updating campaign status:", error);
+    return false;
+  }
+}
+
+export async function getCampaignEmailStats(
+  campaignId: string,
+): Promise<{ sent: number; failed: number; pending: number }> {
+  try {
+    const { data, error } = await supabase
+      .from("email_sends")
+      .select("status")
+      .eq("campaign_id", campaignId);
+
+    if (error) throw error;
+
+    const stats = {
+      sent: (data as EmailSendRecord[]).filter((s) => s.status === "sent")
+        .length,
+      failed: (data as EmailSendRecord[]).filter((s) => s.status === "failed")
+        .length,
+      pending: (data as EmailSendRecord[]).filter((s) => s.status === "pending")
+        .length,
+    };
+
+    return stats;
+  } catch (error) {
+    console.error("Error fetching campaign stats:", error);
+    return { sent: 0, failed: 0, pending: 0 };
+  }
+}
+
+// ====== CUSTOMER PORTAL ======
+
+export interface CustomerPortalTicket {
+  id: string;
+  ticket_number: string;
+  title: string;
+  description: string;
+  status: string;
+  priority: string;
+  created_at: string;
+  updated_at: string;
+  assigned_to_name?: string;
+}
+
+export interface CustomerPortalView {
+  customer_id: string;
+  customer_name: string;
+  customer_email: string;
+  total_tickets: number;
+  tickets: CustomerPortalTicket[];
+}
+
+export async function getCustomerTicketsPublic(
+  customerId: string,
+): Promise<CustomerPortalView | null> {
+  try {
+    // Get customer info
+    const { data: customer, error: customerError } = await supabase
+      .from("customers")
+      .select("id, full_name, email")
+      .eq("id", customerId)
+      .single();
+
+    if (customerError || !customer) {
+      console.error("Customer not found:", customerError);
+      return null;
+    }
+
+    // Get customer's tickets
+    const { data: tickets, error: ticketsError } = await supabase
+      .from("tickets")
+      .select(
+        "id, ticket_number, title, description, status, priority, created_at, updated_at, users(full_name)",
+      )
+      .eq("customer_id", customerId)
+      .order("created_at", { ascending: false });
+
+    if (ticketsError) {
+      console.error("Error fetching customer tickets:", ticketsError);
+      return null;
+    }
+
+    // Transform to portal view
+    const portalTickets: CustomerPortalTicket[] = (tickets || []).map(
+      (ticket: any) => ({
+        id: ticket.id,
+        ticket_number: ticket.ticket_number,
+        title: ticket.title,
+        description: ticket.description,
+        status: ticket.status,
+        priority: ticket.priority,
+        created_at: ticket.created_at,
+        updated_at: ticket.updated_at,
+        assigned_to_name: ticket.users?.full_name,
+      }),
+    );
+
+    return {
+      customer_id: customer.id,
+      customer_name: customer.full_name,
+      customer_email: customer.email,
+      total_tickets: tickets?.length || 0,
+      tickets: portalTickets,
+    };
+  } catch (error) {
+    console.error("Error loading customer portal data:", error);
+    return null;
+  }
+}
+
+export async function getTicketDetailPublic(
+  ticketId: string,
+): Promise<
+  (TicketRecord & { customer?: any; assigned_to_name?: string }) | null
+> {
+  try {
+    const { data, error } = await supabase
+      .from("tickets")
+      .select("*, customers(id, full_name, email), users(full_name)")
+      .eq("id", ticketId)
+      .single();
+
+    if (error || !data) {
+      console.error("Error fetching ticket:", error);
+      return null;
+    }
+
+    return {
+      ...(data as any),
+      assigned_to_name: (data as any).users?.full_name,
+    };
+  } catch (error) {
+    console.error("Error fetching ticket detail:", error);
+    return null;
+  }
+}
+
+// ====== SLA TRACKING ======
+
+export interface SLAMetrics {
+  ticketId: string;
+  ticketNumber: string;
+  title: string;
+  customer_name: string;
+  created_at: string;
+  first_response_at?: string;
+  resolved_at?: string;
+  response_time_hours?: number;
+  resolution_time_hours?: number;
+  status: string;
+  priority: string;
+  breached: boolean;
+  response_breached: boolean;
+  resolution_breached: boolean;
+}
+
+export interface SLASettings {
+  organization_id: string;
+  first_response_hours: number;
+  resolution_hours: number;
+  updated_at: string;
+}
+
+export async function getSLASettings(
+  organizationId: string,
+): Promise<SLASettings | null> {
+  try {
+    const { data, error } = await supabase
+      .from("sla_settings")
+      .select("*")
+      .eq("organization_id", organizationId)
+      .single();
+
+    if (error && error.code !== "PGRST116") {
+      console.error("Error fetching SLA settings:", error);
+    }
+
+    // Return default SLA if not configured
+    if (!data) {
+      return {
+        organization_id: organizationId,
+        first_response_hours: 4,
+        resolution_hours: 24,
+        updated_at: new Date().toISOString(),
+      };
+    }
+
+    return data as SLASettings;
+  } catch (error) {
+    console.error("Error fetching SLA settings:", error);
+    return null;
+  }
+}
+
+export async function updateSLASettings(
+  organizationId: string,
+  firstResponseHours: number,
+  resolutionHours: number,
+): Promise<boolean> {
+  try {
+    const { error } = await supabase.from("sla_settings").upsert(
+      {
+        organization_id: organizationId,
+        first_response_hours: firstResponseHours,
+        resolution_hours: resolutionHours,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "organization_id" },
+    );
+
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error("Error updating SLA settings:", error);
+    return false;
+  }
+}
+
+export async function calculateSLAMetrics(
+  organizationId: string,
+): Promise<SLAMetrics[]> {
+  try {
+    // Get SLA settings
+    const slaSettings = await getSLASettings(organizationId);
+    if (!slaSettings) {
+      throw new Error("SLA settings not found");
+    }
+
+    // Get all tickets and calculate metrics
+    const { data: tickets, error } = await supabase
+      .from("tickets")
+      .select(
+        "id, ticket_number, title, status, priority, created_at, assigned_at, resolved_at, customers(full_name)",
+      )
+      .eq("organization_id", organizationId)
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+
+    const metrics: SLAMetrics[] = (tickets || []).map((ticket: any) => {
+      const createdTime = new Date(ticket.created_at).getTime();
+      const currentTime = new Date().getTime();
+
+      // Calculate response time (time until first assignment/response)
+      let responseTimeHours = null;
+      let responseBreached = false;
+
+      if (ticket.assigned_at) {
+        const assignedTime = new Date(ticket.assigned_at).getTime();
+        responseTimeHours = (assignedTime - createdTime) / (1000 * 60 * 60);
+        responseBreached = responseTimeHours > slaSettings.first_response_hours;
+      } else {
+        // Not yet assigned - check if breaching
+        const elapsedHours = (currentTime - createdTime) / (1000 * 60 * 60);
+        if (elapsedHours > slaSettings.first_response_hours) {
+          responseBreached = true;
+        }
+      }
+
+      // Calculate resolution time
+      let resolutionTimeHours = null;
+      let resolutionBreached = false;
+
+      if (ticket.resolved_at) {
+        const resolvedTime = new Date(ticket.resolved_at).getTime();
+        resolutionTimeHours = (resolvedTime - createdTime) / (1000 * 60 * 60);
+        resolutionBreached = resolutionTimeHours > slaSettings.resolution_hours;
+      } else {
+        // Not yet resolved - check if breaching
+        const elapsedHours = (currentTime - createdTime) / (1000 * 60 * 60);
+        if (elapsedHours > slaSettings.resolution_hours) {
+          resolutionBreached = true;
+        }
+      }
+
+      return {
+        ticketId: ticket.id,
+        ticketNumber: ticket.ticket_number,
+        title: ticket.title,
+        customer_name: ticket.customers?.full_name || "Unknown",
+        created_at: ticket.created_at,
+        first_response_at: ticket.assigned_at,
+        resolved_at: ticket.resolved_at,
+        response_time_hours: responseTimeHours
+          ? Math.round(responseTimeHours * 10) / 10
+          : undefined,
+        resolution_time_hours: resolutionTimeHours
+          ? Math.round(resolutionTimeHours * 10) / 10
+          : undefined,
+        status: ticket.status,
+        priority: ticket.priority,
+        breached: responseBreached || resolutionBreached,
+        response_breached: responseBreached,
+        resolution_breached: resolutionBreached,
+      };
+    });
+
+    return metrics;
+  } catch (error) {
+    console.error("Error calculating SLA metrics:", error);
+    return [];
+  }
+}
+
+export async function getSLAStats(organizationId: string): Promise<{
+  total_tickets: number;
+  sla_breaches: number;
+  compliance_rate: number;
+  avg_response_time: number;
+  avg_resolution_time: number;
+}> {
+  try {
+    const metrics = await calculateSLAMetrics(organizationId);
+
+    if (metrics.length === 0) {
+      return {
+        total_tickets: 0,
+        sla_breaches: 0,
+        compliance_rate: 100,
+        avg_response_time: 0,
+        avg_resolution_time: 0,
+      };
+    }
+
+    const breaches = metrics.filter((m) => m.breached).length;
+    const responseTimes = metrics
+      .filter((m) => m.response_time_hours !== undefined)
+      .map((m) => m.response_time_hours as number);
+    const resolutionTimes = metrics
+      .filter((m) => m.resolution_time_hours !== undefined)
+      .map((m) => m.resolution_time_hours as number);
+
+    const avgResponseTime =
+      responseTimes.length > 0
+        ? responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length
+        : 0;
+    const avgResolutionTime =
+      resolutionTimes.length > 0
+        ? resolutionTimes.reduce((a, b) => a + b, 0) / resolutionTimes.length
+        : 0;
+
+    return {
+      total_tickets: metrics.length,
+      sla_breaches: breaches,
+      compliance_rate: Math.round(
+        ((metrics.length - breaches) / metrics.length) * 100,
+      ),
+      avg_response_time: Math.round(avgResponseTime * 10) / 10,
+      avg_resolution_time: Math.round(avgResolutionTime * 10) / 10,
+    };
+  } catch (error) {
+    console.error("Error calculating SLA stats:", error);
+    return {
+      total_tickets: 0,
+      sla_breaches: 0,
+      compliance_rate: 0,
+      avg_response_time: 0,
+      avg_resolution_time: 0,
+    };
+  }
+}
