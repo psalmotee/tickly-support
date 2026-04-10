@@ -1,12 +1,18 @@
 // used
 import { NextRequest, NextResponse } from "next/server";
 import { getOrganizationWebsites } from "@/lib/supabase-helpers";
+import { getRequestSessionUser } from "@/lib/server-session";
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const user = await getRequestSessionUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { id: organizationId } = await params;
 
     if (!organizationId) {
@@ -20,13 +26,14 @@ export async function GET(
 
     return NextResponse.json({
       success: true,
-      websites,
-      count: websites.length,
+      websites: websites || [],
+      count: (websites || []).length,
     });
   } catch (error) {
-    console.error("Error fetching websites:", error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error("Error fetching websites:", errorMessage);
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: `Internal server error: ${errorMessage}` },
       { status: 500 },
     );
   }

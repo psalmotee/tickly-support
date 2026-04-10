@@ -108,7 +108,7 @@ export async function POST(req: Request) {
         email: email.toLowerCase(),
         password_hash: passwordHash,
         full_name: fullName,
-        role: "user",
+        role: "admin",
       })
       .select()
       .single();

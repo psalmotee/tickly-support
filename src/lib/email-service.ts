@@ -248,6 +248,37 @@ export function dailyDigestTemplate(
   );
 }
 
+export function teamMemberInvitationTemplate(
+  inviteeEmail: string,
+  organizationName: string,
+  inviterName: string,
+  tempPassword: string,
+): string {
+  const loginUrl = `${APP_URL}/login`;
+  return emailTemplate(
+    `
+    <div class="header">
+      <h1>You're Invited to ${organizationName}</h1>
+    </div>
+    <div class="content">
+      <p>Hi there,</p>
+      <p>${inviterName} has invited you to join ${organizationName} on ${APP_NAME} as a team member.</p>
+      <p><strong>Your Login Details:</strong></p>
+      <div style="background: #f3f4f6; padding: 16px; border-radius: 4px; margin: 16px 0; font-family: monospace;">
+        <p style="margin: 8px 0;"><strong>Email:</strong> ${inviteeEmail}</p>
+        <p style="margin: 8px 0;"><strong>Temporary Password:</strong> ${tempPassword}</p>
+      </div>
+      <p style="color: #d97706; font-size: 14px;"><strong>⚠️ Important:</strong> Please change your password after first login.</p>
+      <p style="text-align: center; margin-top: 30px;">
+        <a href="${loginUrl}" class="button">Login to ${APP_NAME}</a>
+      </p>
+      <p>If you have any questions, please don't hesitate to reach out to your team.</p>
+    </div>
+  `,
+    { text: "Login Now", url: loginUrl },
+  );
+}
+
 // ====== EMAIL SENDING FUNCTIONS ======
 
 export async function sendWidgetTicketConfirmation(
@@ -433,6 +464,50 @@ export async function sendDailyDigest(
     return { success: true };
   } catch (error) {
     console.error("Error sending daily digest email:", error);
+    return { success: false, error: String(error) };
+  }
+}
+
+export async function sendTeamMemberInvitation(
+  inviteeEmail: string,
+  organizationName: string,
+  inviterName: string,
+  tempPassword: string,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const resend = getResend();
+    if (!resend) {
+      console.warn(
+        "Email service not configured. Skipping team member invitation email.",
+      );
+      return { success: true }; // Don't fail if email not configured
+    }
+
+    const html = teamMemberInvitationTemplate(
+      inviteeEmail,
+      organizationName,
+      inviterName,
+      tempPassword,
+    );
+
+    const result = await resend.emails.send({
+      from: FROM_EMAIL,
+      to: inviteeEmail,
+      subject: `Welcome to ${organizationName} on ${APP_NAME}`,
+      html,
+    });
+
+    if (result.error) {
+      console.error(
+        "Error sending team member invitation email:",
+        result.error,
+      );
+      return { success: false, error: result.error.message };
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error("Error sending team member invitation email:", error);
     return { success: false, error: String(error) };
   }
 }

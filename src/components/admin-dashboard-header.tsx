@@ -84,8 +84,14 @@ export function AdminDashboardHeader() {
                 </button>
                 <div className="invisible group-hover:visible absolute right-0 mt-0 w-48 bg-card border border-border rounded-lg shadow-lg z-50">
                   <Link
-                    href="/admin-dashboard/custom-fields"
+                    href="/admin-dashboard/organization"
                     className="block w-full text-left px-4 py-2 text-sm text-foreground hover:bg-secondary transition-colors rounded-t-lg"
+                  >
+                    Organization
+                  </Link>
+                  <Link
+                    href="/admin-dashboard/custom-fields"
+                    className="block w-full text-left px-4 py-2 text-sm text-foreground hover:bg-secondary transition-colors"
                   >
                     Custom Fields
                   </Link>

@@ -31,11 +31,19 @@ export default function AdminUsersPage() {
       <AdminDashboardHeader />
 
       <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-foreground">Manage Users</h1>
-          <p className="text-muted-foreground mt-2">
-            View all registered users in the system
-          </p>
+        <div className="mb-8 flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground">Manage Users</h1>
+            <p className="text-muted-foreground mt-2">
+              View and manage your team members
+            </p>
+          </div>
+          <a
+            href="/admin-dashboard/users-list/invite-member"
+            className="inline-block px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition"
+          >
+            + Invite Member
+          </a>
         </div>
 
         <AdminUserList />

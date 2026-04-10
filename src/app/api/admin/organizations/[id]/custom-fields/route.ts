@@ -76,7 +76,10 @@ export async function POST(
 
     if (!field) {
       return NextResponse.json(
-        { success: false, message: "Failed to create field" },
+        {
+          success: false,
+          message: "Failed to create field - check server logs",
+        },
         { status: 500 },
       );
     }
@@ -89,9 +92,14 @@ export async function POST(
       { status: 201 },
     );
   } catch (error) {
-    console.error("Error creating custom field:", error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error("Error creating custom field:", errorMessage);
     return NextResponse.json(
-      { success: false, message: "Internal server error" },
+      {
+        success: false,
+        message: `Failed to create field: ${errorMessage}`,
+        error: errorMessage,
+      },
       { status: 500 },
     );
   }
@@ -122,7 +130,7 @@ export async function PUT(
       );
     }
 
-    const field = await updateCustomField(fieldId, updates);
+    const field = await updateCustomField(organizationId, fieldId, updates);
 
     if (!field) {
       return NextResponse.json(
@@ -169,7 +177,7 @@ export async function DELETE(
       );
     }
 
-    const success = await deleteCustomField(fieldId);
+    const success = await deleteCustomField(organizationId, fieldId);
 
     if (!success) {
       return NextResponse.json(

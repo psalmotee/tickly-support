@@ -1,18 +1,54 @@
 // used
+"use client";
+
+import { useEffect, useState } from "react";
 import { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { TeamManagement } from "@/components/team-management";
 
-export const metadata: Metadata = {
-  title: "Organization Settings | Tickly",
-  description: "Manage your organization settings and team members",
-};
-
 export default function OrganizationSettingsPage() {
-  // TODO: Get organization ID from URL params or context
-  // For now, we'll need to get it from the admin dashboard or a selector
-  const organizationId = "default-org-id";
+  const [organizationId, setOrganizationId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchOrganization = async () => {
+      try {
+        const response = await fetch("/api/admin/organizations/current");
+        if (response.ok) {
+          const data = await response.json();
+          setOrganizationId(data.organization.id);
+        }
+      } catch (error) {
+        console.error("Failed to fetch organization:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchOrganization();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-flex h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+          <p className="mt-4 text-muted-foreground">Loading organization...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!organizationId) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-muted-foreground">Failed to load organization</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">

@@ -2,7 +2,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useParams } from "next/navigation";
 import Link from "next/link";
 
 interface CustomField {
@@ -17,8 +16,7 @@ interface CustomField {
 }
 
 export default function CustomFieldsPage() {
-  const params = useParams();
-  const orgId = params.id as string;
+  const [orgId, setOrgId] = useState<string | null>(null);
 
   const [fields, setFields] = useState<CustomField[]>([]);
   const [loading, setLoading] = useState(true);
@@ -38,7 +36,25 @@ export default function CustomFieldsPage() {
   });
 
   useEffect(() => {
-    loadFields();
+    fetchCurrentOrganization();
+  }, []);
+
+  const fetchCurrentOrganization = async () => {
+    try {
+      const response = await fetch("/api/admin/organizations/current");
+      if (!response.ok) throw new Error("Failed to fetch organization");
+      const data = await response.json();
+      setOrgId(data.organization.id);
+    } catch (err) {
+      console.error("Error fetching organization:", err);
+      setError("Failed to load organization");
+    }
+  };
+
+  useEffect(() => {
+    if (orgId) {
+      loadFields();
+    }
   }, [orgId]);
 
   const loadFields = async () => {
@@ -79,6 +95,11 @@ export default function CustomFieldsPage() {
 
   const handleSave = async () => {
     try {
+      if (!orgId) {
+        setError("Organization not loaded. Please refresh the page.");
+        return;
+      }
+
       setSaving(true);
       setError("");
 

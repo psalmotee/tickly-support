@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
 
 interface EmailPreferences {
   notify_new_tickets: boolean;
@@ -13,8 +12,7 @@ interface EmailPreferences {
 }
 
 export default function EmailPreferencesPage() {
-  const params = useParams();
-  const orgId = params.id as string;
+  const [orgId, setOrgId] = useState<string | null>(null);
 
   const [preferences, setPreferences] = useState<EmailPreferences>({
     notify_new_tickets: true,
@@ -30,7 +28,25 @@ export default function EmailPreferencesPage() {
   const [success, setSuccess] = useState(false);
 
   useEffect(() => {
-    loadPreferences();
+    fetchCurrentOrganization();
+  }, []);
+
+  const fetchCurrentOrganization = async () => {
+    try {
+      const response = await fetch("/api/admin/organizations/current");
+      if (!response.ok) throw new Error("Failed to fetch organization");
+      const data = await response.json();
+      setOrgId(data.organization.id);
+    } catch (err) {
+      console.error("Error fetching organization:", err);
+      setError("Failed to load organization");
+    }
+  };
+
+  useEffect(() => {
+    if (orgId) {
+      loadPreferences();
+    }
   }, [orgId]);
 
   const loadPreferences = async () => {
@@ -72,6 +88,11 @@ export default function EmailPreferencesPage() {
 
   const handleSave = async () => {
     try {
+      if (!orgId) {
+        setError("Organization not loaded. Please refresh the page.");
+        return;
+      }
+
       setSaving(true);
       setError("");
       setSuccess(false);

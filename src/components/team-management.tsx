@@ -57,16 +57,30 @@ export function TeamManagement({ organizationId }: TeamManagementProps) {
       );
 
       if (!res.ok) {
-        throw new Error("Failed to fetch team data");
+        const errorData = await res.json().catch(() => ({}));
+        const errorMessage =
+          errorData.error ||
+          `Failed to fetch team data: ${res.status} ${res.statusText}`;
+        console.error("[team-management] Fetch failed:", {
+          status: res.status,
+          statusText: res.statusText,
+          error: errorData,
+        });
+        throw new Error(errorMessage);
       }
 
       const data = await res.json();
-      setMembers(data.members);
-      setPendingInvites(data.pendingInvites);
+      console.log("[team-management] Fetched data:", {
+        memberCount: data.members?.length,
+        inviteCount: data.pendingInvites?.length,
+      });
+      setMembers(data.members || []);
+      setPendingInvites(data.pendingInvites || []);
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to load team members",
-      );
+      const errorMessage =
+        err instanceof Error ? err.message : "Failed to load team members";
+      console.error("[team-management] Error:", errorMessage, err);
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -85,17 +99,15 @@ export function TeamManagement({ organizationId }: TeamManagementProps) {
         return;
       }
 
-      const res = await fetch(
-        `/api/admin/organizations/${organizationId}/members`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            email: inviteEmail.trim(),
-            role: inviteRole,
-          }),
-        },
-      );
+      const res = await fetch("/api/admin/organizations/invite-member", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: inviteEmail.trim(),
+          role: inviteRole,
+          organizationId: organizationId,
+        }),
+      });
 
       const data = await res.json();
 
@@ -373,19 +385,37 @@ export function TeamManagement({ organizationId }: TeamManagementProps) {
       {/* Role Guide */}
       <div className="rounded-lg border border-border/50 bg-background/50 p-6">
         <h4 className="font-semibold text-foreground mb-3">Role Permissions</h4>
-        <div className="space-y-2 text-sm text-muted-foreground">
-          <p>
-            <span className="font-medium text-foreground">Admin:</span> Full
-            access to organization settings, team management, and billing
-          </p>
-          <p>
-            <span className="font-medium text-foreground">Agent:</span> Can
-            manage tickets and view reports
-          </p>
-          <p>
-            <span className="font-medium text-foreground">Viewer:</span>{" "}
-            Read-only access to tickets and reports
-          </p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+          <div>
+            <p className="font-medium text-foreground mb-2">Agent</p>
+            <ul className="text-muted-foreground space-y-1">
+              <li>✓ View assigned tickets</li>
+              <li>✓ Update ticket status</li>
+              <li>✓ Add ticket responses</li>
+              <li>✗ Manage team members</li>
+              <li>✗ View analytics</li>
+            </ul>
+          </div>
+          <div>
+            <p className="font-medium text-foreground mb-2">Admin</p>
+            <ul className="text-muted-foreground space-y-1">
+              <li>✓ All agent permissions</li>
+              <li>✓ Manage team members</li>
+              <li>✓ Manage organization settings</li>
+              <li>✓ View analytics & reports</li>
+              <li>✓ Configure custom fields</li>
+            </ul>
+          </div>
+          <div>
+            <p className="font-medium text-foreground mb-2">Viewer</p>
+            <ul className="text-muted-foreground space-y-1">
+              <li>✓ View all tickets</li>
+              <li>✓ View analytics & reports</li>
+              <li>✗ Respond to tickets</li>
+              <li>✗ Manage team members</li>
+              <li>✗ Manage settings</li>
+            </ul>
+          </div>
         </div>
       </div>
     </div>

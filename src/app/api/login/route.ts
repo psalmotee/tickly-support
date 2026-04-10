@@ -93,11 +93,27 @@ export async function POST(req: Request) {
       );
     }
 
+    // Get user's organization membership to get their org-specific role
+    const { data: orgMembers, error: memberError } = await supabaseAdmin
+      .from("organization_members")
+      .select("*")
+      .eq("user_id", userProfile.id);
+
+    let orgRole = userProfile.role || "user"; // Default to user if no org membership
+    let firstOrgId = null;
+
+    if (!memberError && orgMembers && orgMembers.length > 0) {
+      // Use the first organization membership (most common: users have one org)
+      orgRole = normalizeRole(orgMembers[0].role);
+      firstOrgId = orgMembers[0].organization_id;
+    }
+
     // Create JWT payload (can be extended later with real JWT library)
     const tokenPayload = {
       sub: userProfile.id,
       email: userProfile.email,
-      role: userProfile.role,
+      role: orgRole,
+      organizationId: firstOrgId,
       iat: Math.floor(Date.now() / 1000),
       exp: Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60, // 7 days
     };
@@ -115,7 +131,7 @@ export async function POST(req: Request) {
           id: userProfile.id,
           email: userProfile.email,
           fullName: userProfile.full_name,
-          role: userProfile.role,
+          role: orgRole,
         },
       },
     });
@@ -132,7 +148,7 @@ export async function POST(req: Request) {
       id: userProfile.id,
       email: userProfile.email,
       fullName: userProfile.full_name,
-      role: userProfile.role,
+      role: orgRole,
     });
 
     if (sessionCookieValue) {

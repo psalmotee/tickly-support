@@ -1,11 +1,6 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { supabaseAdmin } from "@/lib/supabase-client";
 import { getRequestSessionUser } from "@/lib/server-session";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || "",
-  process.env.SUPABASE_SERVICE_KEY || "",
-);
 
 export async function GET(req: Request) {
   const sessionUser = await getRequestSessionUser();
@@ -31,25 +26,47 @@ export async function GET(req: Request) {
   const offset = (page - 1) * limit;
 
   try {
-    let countQuery = supabase.from("users").select("*", { count: "exact" });
-    let dataQuery = supabase
-      .from("users")
-      .select("id, email, full_name, role")
+    // Get user's organization
+    const { data: memberships } = await supabaseAdmin
+      .from("organization_members")
+      .select("organization_id")
+      .eq("user_id", sessionUser.id);
+
+    if (!memberships || memberships.length === 0) {
+      return NextResponse.json({
+        success: true,
+        users: [],
+        meta: { page, limit, total: 0, totalPages: 0 },
+      });
+    }
+
+    const orgId = memberships[0].organization_id;
+
+    // Get organization members with user details
+    let countQuery = supabaseAdmin
+      .from("organization_members")
+      .select("user_id", { count: "exact" })
+      .eq("organization_id", orgId);
+
+    let dataQuery = supabaseAdmin
+      .from("organization_members")
+      .select("user_id, role, users(id, email, full_name)")
+      .eq("organization_id", orgId)
       .order("created_at", { ascending: false })
       .range(offset, offset + limit - 1);
 
     if (query) {
       const searchTerm = `%${query}%`;
       countQuery = countQuery.or(
-        `email.ilike.${searchTerm},full_name.ilike.${searchTerm}`,
+        `users.email.ilike.${searchTerm},users.full_name.ilike.${searchTerm}`,
       );
       dataQuery = dataQuery.or(
-        `email.ilike.${searchTerm},full_name.ilike.${searchTerm}`,
+        `users.email.ilike.${searchTerm},users.full_name.ilike.${searchTerm}`,
       );
     }
 
     const { count: total } = await countQuery;
-    const { data: userData, error } = await dataQuery;
+    const { data: memberData, error } = await dataQuery;
 
     if (error) {
       console.error("[admin-users][GET] Error:", error);
@@ -59,12 +76,15 @@ export async function GET(req: Request) {
       );
     }
 
-    const users = (userData || []).map((user) => ({
-      id: user.id,
-      email: user.email,
-      fullName: user.full_name || "Unknown User",
-      role: user.role,
-    }));
+    // Map organization members to user format
+    const users = (memberData || [])
+      .filter((item: any) => item.users) // Filter out null user references
+      .map((item: any) => ({
+        id: item.users.id,
+        email: item.users.email,
+        fullName: item.users.full_name || "Unknown User",
+        role: item.role,
+      }));
 
     return NextResponse.json({
       success: true,

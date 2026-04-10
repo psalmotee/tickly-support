@@ -7,7 +7,7 @@
  * Replaces MantaHQ SDK usage throughout the app
  */
 
-import { supabase } from "./supabase-client";
+import { supabase, supabaseAdmin } from "./supabase-client";
 
 // ====== USERS ======
 
@@ -226,14 +226,51 @@ export async function getOrganizationMembers(
   (OrganizationMemberRecord & { user?: { email: string; full_name: string } })[]
 > {
   try {
-    const { data, error } = await supabase
+    // Fetch organization members
+    const { data: members, error: membersError } = await supabaseAdmin
       .from("organization_members")
-      .select("*, users(email, full_name)")
+      .select("*")
       .eq("organization_id", organizationId)
       .order("created_at", { ascending: false });
 
-    if (error) throw error;
-    return data as any[];
+    if (membersError || !members) {
+      console.error("Error fetching organization members:", membersError);
+      return [];
+    }
+
+    // Get all user ids
+    const userIds = members.map((m) => m.user_id);
+    if (userIds.length === 0) {
+      return [];
+    }
+
+    // Fetch user details
+    const { data: users, error: usersError } = await supabaseAdmin
+      .from("users")
+      .select("id, email, full_name")
+      .in("id", userIds);
+
+    if (usersError) {
+      console.error("Error fetching users:", usersError);
+      // Return members without user data rather than failing completely
+      return members as any[];
+    }
+
+    // Create a user map for easy lookup
+    const userMap = new Map(users?.map((u) => [u.id, u]) || []);
+
+    // Combine members with user data
+    const result = members.map((m) => ({
+      ...m,
+      user: userMap.get(m.user_id) || null,
+    }));
+
+    console.log("[getOrganizationMembers] Fetched members with users:", {
+      memberCount: members.length,
+      userCount: users?.length || 0,
+    });
+
+    return result as any[];
   } catch (error) {
     console.error("Error fetching organization members:", error);
     return [];
@@ -246,7 +283,7 @@ export async function updateOrganizationMember(
   updates: Partial<Pick<OrganizationMemberRecord, "role">>,
 ): Promise<OrganizationMemberRecord | null> {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from("organization_members")
       .update(updates)
       .eq("organization_id", organizationId)
@@ -267,7 +304,7 @@ export async function removeOrganizationMember(
   userId: string,
 ): Promise<boolean> {
   try {
-    const { error } = await supabase
+    const { error } = await supabaseAdmin
       .from("organization_members")
       .delete()
       .eq("organization_id", organizationId)
@@ -304,7 +341,7 @@ export async function createOrganizationInvite(
     const token = generateSecureToken();
     const expiresAt = new Date(Date.now() + expiresIn).toISOString();
 
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from("organization_invites")
       .insert([
         {
@@ -319,7 +356,15 @@ export async function createOrganizationInvite(
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error("Error creating organization invite:", {
+        error,
+        organizationId,
+        email,
+        role,
+      });
+      throw error;
+    }
     return data as OrganizationInviteRecord;
   } catch (error) {
     console.error("Error creating organization invite:", error);
@@ -416,7 +461,7 @@ export async function getOrganizationInvitesForOrg(
   organizationId: string,
 ): Promise<OrganizationInviteRecord[]> {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from("organization_invites")
       .select("*")
       .eq("organization_id", organizationId)
@@ -1898,15 +1943,20 @@ export async function createCustomField(
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error("Supabase error creating custom field:", error);
+      throw new Error(`Supabase: ${error.message}`);
+    }
     return data as CustomFieldRecord;
   } catch (error) {
-    console.error("Error creating custom field:", error);
-    return null;
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error("Error creating custom field:", msg);
+    throw error;
   }
 }
 
 export async function updateCustomField(
+  organizationId: string,
   fieldId: string,
   updates: Partial<
     Omit<
@@ -1920,6 +1970,7 @@ export async function updateCustomField(
       .from("custom_fields")
       .update(updates)
       .eq("id", fieldId)
+      .eq("organization_id", organizationId)
       .select()
       .single();
 
@@ -1931,13 +1982,17 @@ export async function updateCustomField(
   }
 }
 
-export async function deleteCustomField(fieldId: string): Promise<boolean> {
+export async function deleteCustomField(
+  organizationId: string,
+  fieldId: string,
+): Promise<boolean> {
   try {
     // Soft delete
     const { error } = await supabase
       .from("custom_fields")
       .update({ is_active: false })
-      .eq("id", fieldId);
+      .eq("id", fieldId)
+      .eq("organization_id", organizationId);
 
     if (error) throw error;
     return true;

@@ -2,9 +2,8 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getRequestSessionUser } from "@/lib/server-session";
+import { supabaseAdmin } from "@/lib/supabase-client";
 import {
-  getOrganizationById,
-  getOrganizationMember,
   getOrganizationMembers,
   updateOrganizationMember,
   removeOrganizationMember,
@@ -27,21 +26,29 @@ export async function GET(
 
     const { id: organizationId } = await context.params;
 
-    // Verify organization exists
-    const org = await getOrganizationById(organizationId);
-    if (!org) {
+    // Verify organization exists using supabaseAdmin to bypass RLS
+    const { data: org, error: orgError } = await supabaseAdmin
+      .from("organizations")
+      .select("*")
+      .eq("id", organizationId)
+      .single();
+
+    if (orgError || !org) {
       return NextResponse.json(
         { success: false, error: "Organization not found" },
         { status: 404 },
       );
     }
 
-    // Check if user is admin of organization
-    const membership = await getOrganizationMember(
-      organizationId,
-      sessionUser.id,
-    );
-    if (!membership || membership.role !== "admin") {
+    // Check if user is admin of organization using supabaseAdmin to bypass RLS
+    const { data: membership, error: memberError } = await supabaseAdmin
+      .from("organization_members")
+      .select("*")
+      .eq("organization_id", organizationId)
+      .eq("user_id", sessionUser.id)
+      .single();
+
+    if (memberError || !membership || membership.role !== "admin") {
       return NextResponse.json(
         { success: false, error: "Forbidden" },
         { status: 403 },
@@ -50,6 +57,11 @@ export async function GET(
 
     // Fetch members
     const members = await getOrganizationMembers(organizationId);
+
+    console.log("[org-members][GET] Fetched members:", {
+      count: members.length,
+      sample: members[0],
+    });
 
     // Fetch pending invites
     const invites = await getOrganizationInvitesForOrg(organizationId);
@@ -72,7 +84,17 @@ export async function GET(
       })),
     });
   } catch (error: unknown) {
-    console.error("[org-members][GET] Failed to fetch members", { error });
+    const errorMessage =
+      error instanceof Error
+        ? error.message
+        : typeof error === "object" && error !== null && "message" in error
+          ? String((error as any).message)
+          : String(error);
+
+    console.error("[org-members][GET] Failed to fetch members", {
+      error: errorMessage,
+      details: error,
+    });
     return NextResponse.json(
       { success: false, error: "Failed to fetch members" },
       { status: 500 },
@@ -95,21 +117,29 @@ export async function POST(
 
     const { id: organizationId } = await context.params;
 
-    // Verify organization exists
-    const org = await getOrganizationById(organizationId);
-    if (!org) {
+    // Verify organization exists using supabaseAdmin to bypass RLS
+    const { data: org, error: orgError } = await supabaseAdmin
+      .from("organizations")
+      .select("*")
+      .eq("id", organizationId)
+      .single();
+
+    if (orgError || !org) {
       return NextResponse.json(
         { success: false, error: "Organization not found" },
         { status: 404 },
       );
     }
 
-    // Check if user is admin of organization
-    const membership = await getOrganizationMember(
-      organizationId,
-      sessionUser.id,
-    );
-    if (!membership || membership.role !== "admin") {
+    // Check if user is admin of organization using supabaseAdmin to bypass RLS
+    const { data: membership, error: memberError } = await supabaseAdmin
+      .from("organization_members")
+      .select("*")
+      .eq("organization_id", organizationId)
+      .eq("user_id", sessionUser.id)
+      .single();
+
+    if (memberError || !membership || membership.role !== "admin") {
       return NextResponse.json(
         { success: false, error: "Forbidden" },
         { status: 403 },
@@ -152,6 +182,10 @@ export async function POST(
     );
 
     if (!invite) {
+      console.error(
+        "[org-members][POST] createOrganizationInvite returned null for email:",
+        email,
+      );
       return NextResponse.json(
         { success: false, error: "Failed to create invite" },
         { status: 500 },
@@ -196,12 +230,15 @@ export async function PATCH(
 
     const { id: organizationId } = await context.params;
 
-    // Check if user is admin of organization
-    const membership = await getOrganizationMember(
-      organizationId,
-      sessionUser.id,
-    );
-    if (!membership || membership.role !== "admin") {
+    // Check if user is admin of organization using supabaseAdmin to bypass RLS
+    const { data: membership, error: memberError } = await supabaseAdmin
+      .from("organization_members")
+      .select("*")
+      .eq("organization_id", organizationId)
+      .eq("user_id", sessionUser.id)
+      .single();
+
+    if (memberError || !membership || membership.role !== "admin") {
       return NextResponse.json(
         { success: false, error: "Forbidden" },
         { status: 403 },
@@ -282,12 +319,15 @@ export async function DELETE(
 
     const { id: organizationId } = await context.params;
 
-    // Check if user is admin of organization
-    const membership = await getOrganizationMember(
-      organizationId,
-      sessionUser.id,
-    );
-    if (!membership || membership.role !== "admin") {
+    // Check if user is admin of organization using supabaseAdmin to bypass RLS
+    const { data: membership, error: memberError } = await supabaseAdmin
+      .from("organization_members")
+      .select("*")
+      .eq("organization_id", organizationId)
+      .eq("user_id", sessionUser.id)
+      .single();
+
+    if (memberError || !membership || membership.role !== "admin") {
       return NextResponse.json(
         { success: false, error: "Forbidden" },
         { status: 403 },

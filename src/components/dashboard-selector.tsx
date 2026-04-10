@@ -45,21 +45,30 @@ export function DashboardSelector({
     const loadOrganizations = async () => {
       try {
         const response = await fetch("/api/admin/organizations");
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(
+            errorData.error ||
+              `Failed to load organizations (${response.status})`,
+          );
+        }
+
         const data = await response.json();
 
-        if (response.ok && data.organizations) {
+        if (data.organizations) {
           setOrganizations(data.organizations);
           if (!selectedOrgId && data.organizations.length > 0) {
             const firstOrgId = data.organizations[0].id;
             setSelectedOrgId(firstOrgId);
             onOrgChange?.(firstOrgId);
             // Load websites for the first org
-            loadWebsites(firstOrgId);
+            await loadWebsites(firstOrgId);
           }
         }
-        setLoading(false);
       } catch (error) {
         console.error("Failed to load organizations:", error);
+      } finally {
         setLoading(false);
       }
     };
@@ -69,18 +78,32 @@ export function DashboardSelector({
 
   const loadWebsites = async (orgId: string) => {
     try {
+      if (!orgId) {
+        console.error("Organization ID is required to load websites");
+        return;
+      }
+
       const response = await fetch(
         `/api/admin/organizations/${orgId}/websites`,
       );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(
+          errorData.error || `Failed to load websites (${response.status})`,
+        );
+      }
+
       const data = await response.json();
 
-      if (response.ok && data.websites) {
+      if (data.websites) {
         setWebsites(data.websites);
         setSelectedWebsiteId(null); // Reset website selection
         onWebsiteChange?.(null);
       }
     } catch (error) {
       console.error("Failed to load websites:", error);
+      setWebsites([]); // Reset websites on error
     }
   };
 
