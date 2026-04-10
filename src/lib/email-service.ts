@@ -475,13 +475,26 @@ export async function sendTeamMemberInvitation(
   tempPassword: string,
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    console.log("[sendTeamMemberInvitation] Starting email send process", {
+      to: inviteeEmail,
+      organization: organizationName,
+      inviter: inviterName,
+    });
+
     const resend = getResend();
     if (!resend) {
-      console.warn(
-        "Email service not configured. Skipping team member invitation email.",
-      );
+      console.warn("[sendTeamMemberInvitation] Email service not configured", {
+        RESEND_API_KEY_SET: !!process.env.RESEND_API_KEY,
+        FROM_EMAIL,
+        NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
+      });
       return { success: true }; // Don't fail if email not configured
     }
+
+    console.log("[sendTeamMemberInvitation] Resend client initialized", {
+      RESEND_API_KEY_LENGTH: (process.env.RESEND_API_KEY || "").length,
+      FROM_EMAIL,
+    });
 
     const html = teamMemberInvitationTemplate(
       inviteeEmail,
@@ -490,24 +503,45 @@ export async function sendTeamMemberInvitation(
       tempPassword,
     );
 
-    const result = await resend.emails.send({
+    console.log("[sendTeamMemberInvitation] Email template generated", {
+      htmlLength: html.length,
+      subject: `Welcome to ${organizationName} on ${APP_NAME}`,
+    });
+
+    const sendPayload = {
       from: FROM_EMAIL,
       to: inviteeEmail,
       subject: `Welcome to ${organizationName} on ${APP_NAME}`,
       html,
+    };
+
+    console.log("[sendTeamMemberInvitation] Sending via Resend API", {
+      from: sendPayload.from,
+      to: sendPayload.to,
+      subject: sendPayload.subject,
     });
 
+    const result = await resend.emails.send(sendPayload);
+
     if (result.error) {
-      console.error(
-        "Error sending team member invitation email:",
-        result.error,
-      );
+      console.error("[sendTeamMemberInvitation] Resend returned error:", {
+        errorMessage: result.error.message,
+        error: result.error,
+      });
       return { success: false, error: result.error.message };
     }
 
+    console.log("[sendTeamMemberInvitation] Email sent successfully", {
+      id: (result.data as any)?.id,
+      to: inviteeEmail,
+      timestamp: new Date().toISOString(),
+    });
     return { success: true };
   } catch (error) {
-    console.error("Error sending team member invitation email:", error);
+    console.error("[sendTeamMemberInvitation] Unexpected error:", {
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
     return { success: false, error: String(error) };
   }
 }

@@ -5,6 +5,8 @@ import type React from "react";
 import { useState, useEffect } from "react";
 import { useAuth } from "./auth-provider";
 import { FormError } from "./form-error";
+import { Modal } from "./modal";
+import { DeleteConfirmationModal } from "./delete-confirmation-modal";
 import { Trash2, UserPlus, Copy, Check } from "lucide-react";
 
 interface TeamMember {
@@ -42,6 +44,12 @@ export function TeamManagement({ organizationId }: TeamManagementProps) {
   const [inviteSuccess, setInviteSuccess] = useState("");
   const [copySuccess, setCopySuccess] = useState<string | null>(null);
   const [editingRole, setEditingRole] = useState<string | null>(null);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [memberToDelete, setMemberToDelete] = useState<{
+    userId: string;
+    fullName: string;
+  } | null>(null);
+  const [deletingMember, setDeletingMember] = useState(false);
 
   useEffect(() => {
     fetchTeamData();
@@ -129,15 +137,21 @@ export function TeamManagement({ organizationId }: TeamManagementProps) {
   };
 
   const handleRemoveMember = async (userId: string, userName: string) => {
-    if (!confirm(`Remove ${userName} from the organization?`)) return;
+    setMemberToDelete({ userId, fullName: userName });
+    setDeleteModalOpen(true);
+  };
 
+  const confirmRemoveMember = async () => {
+    if (!memberToDelete) return;
+
+    setDeletingMember(true);
     try {
       const res = await fetch(
         `/api/admin/organizations/${organizationId}/members`,
         {
           method: "DELETE",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ userId }),
+          body: JSON.stringify({ userId: memberToDelete.userId }),
         },
       );
 
@@ -146,9 +160,15 @@ export function TeamManagement({ organizationId }: TeamManagementProps) {
         throw new Error(data.error || "Failed to remove member");
       }
 
+      setDeleteModalOpen(false);
+      setMemberToDelete(null);
       await fetchTeamData();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to remove member");
+      setDeleteModalOpen(false);
+      setMemberToDelete(null);
+    } finally {
+      setDeletingMember(false);
     }
   };
 
@@ -418,6 +438,32 @@ export function TeamManagement({ organizationId }: TeamManagementProps) {
           </div>
         </div>
       </div>
+
+      {/* Delete Member Modal */}
+      <Modal
+        isOpen={deleteModalOpen}
+        onClose={() => {
+          setDeleteModalOpen(false);
+          setMemberToDelete(null);
+        }}
+        className="bg-destructive/10"
+        icon={<Trash2 className="h-5 w-5 text-destructive" />}
+        title="Remove Team Member"
+      >
+        {memberToDelete && (
+          <DeleteConfirmationModal
+            title="Remove Team Member"
+            description={`Are you sure you want to remove ${memberToDelete.fullName} from this organization?`}
+            itemName={memberToDelete.fullName}
+            onConfirm={confirmRemoveMember}
+            onCancel={() => {
+              setDeleteModalOpen(false);
+              setMemberToDelete(null);
+            }}
+            isLoading={deletingMember}
+          />
+        )}
+      </Modal>
     </div>
   );
 }

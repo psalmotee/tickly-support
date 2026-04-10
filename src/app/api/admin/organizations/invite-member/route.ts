@@ -10,13 +10,23 @@ import { sendTeamMemberInvitation } from "@/lib/email-service";
  */
 export async function POST(request: NextRequest) {
   try {
+    console.log("[invite-member] Starting invitation process");
+
     const user = await getRequestSessionUser();
     if (!user) {
+      console.log("[invite-member] No authenticated user found");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const body = await request.json();
     const { email, role, organizationId } = body;
+
+    console.log("[invite-member] Request body:", {
+      email,
+      role,
+      organizationId,
+      userId: user.id,
+    });
 
     if (!email || !role || !organizationId) {
       return NextResponse.json(
@@ -102,12 +112,23 @@ export async function POST(request: NextRequest) {
         .single();
 
       // Send invitation email to existing user
-      await sendTeamMemberInvitation(
+      console.log(
+        "[invite-member] Sending invitation email for existing user",
+        {
+          email: existingUser.email,
+          organizationName: org?.name,
+          inviterName: inviter?.full_name,
+        },
+      );
+
+      const emailResult = await sendTeamMemberInvitation(
         existingUser.email,
         org?.name || "Your Organization",
         inviter?.full_name || "A team member",
         "See your organization admin for password reset",
       );
+
+      console.log("[invite-member] Email send result:", emailResult);
 
       return NextResponse.json({
         success: true,
@@ -117,6 +138,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create new user with temporary password
+    console.log("[invite-member] Creating new user account for:", email);
     const tempPassword = Math.random().toString(36).slice(-8) + "Aa1!";
     const passwordHash = hashPassword(tempPassword);
 
@@ -171,12 +193,21 @@ export async function POST(request: NextRequest) {
       .single();
 
     // Send invitation email with temporary password
-    await sendTeamMemberInvitation(
+    console.log("[invite-member] Sending invitation email for new user", {
+      email,
+      organizationName: org?.name,
+      inviterName: inviter?.full_name,
+      tempPasswordGenerated: !!tempPassword,
+    });
+
+    const emailResult = await sendTeamMemberInvitation(
       email,
       org?.name || "Your Organization",
       inviter?.full_name || "A team member",
       tempPassword,
     );
+
+    console.log("[invite-member] Email send result:", emailResult);
 
     return NextResponse.json({
       success: true,
@@ -188,7 +219,10 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("Error inviting member:", error);
+    console.error("[invite-member] Unexpected error:", {
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
     return NextResponse.json(
       { error: "Failed to invite member" },
       { status: 500 },
