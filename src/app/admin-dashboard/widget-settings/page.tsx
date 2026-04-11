@@ -27,7 +27,15 @@ export default function WidgetSettingsPage() {
       const response = await fetch("/api/admin/websites");
 
       if (!response.ok) {
-        throw new Error("Failed to load websites");
+        const errorData = await response.json().catch(() => ({}));
+        console.error(
+          "[widget-settings] API error:",
+          response.status,
+          errorData.error || "Unknown error",
+        );
+        throw new Error(
+          errorData.error || `Failed to load websites (${response.status})`,
+        );
       }
 
       const data = await response.json();
