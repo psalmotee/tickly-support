@@ -693,7 +693,7 @@ export async function getCustomerByEmail(
   email: string,
 ): Promise<CustomerRecord | null> {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from("customers")
       .select("*")
       .eq("organization_id", organizationId)
@@ -712,7 +712,7 @@ export async function getCustomerById(
   id: string,
 ): Promise<CustomerRecord | null> {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from("customers")
       .select("*")
       .eq("id", id)
@@ -742,7 +742,7 @@ export async function createOrUpdateCustomer(
 
     if (existing) {
       // Update existing customer
-      const { data, error } = await supabase
+      const { data, error } = await supabaseAdmin
         .from("customers")
         .update(customerData)
         .eq("id", existing.id)
@@ -753,7 +753,7 @@ export async function createOrUpdateCustomer(
       return data as CustomerRecord;
     } else {
       // Create new customer
-      const { data, error } = await supabase
+      const { data, error } = await supabaseAdmin
         .from("customers")
         .insert([
           {
@@ -1230,7 +1230,7 @@ export async function getOrganizationCustomers(
     const sortBy = options?.sortBy || "created_at";
     const order = options?.order || "desc";
 
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from("customers")
       .select("*, support_tickets(count)")
       .eq("organization_id", organizationId)
@@ -1255,7 +1255,7 @@ export async function searchCustomers(
   query: string,
 ): Promise<CustomerRecord[]> {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from("customers")
       .select("*")
       .eq("organization_id", organizationId)
@@ -1274,7 +1274,7 @@ export async function getCustomerWithTickets(
   customerId: string,
 ): Promise<(CustomerRecord & { tickets: TicketRecord[] }) | null> {
   try {
-    const { data: customer, error: customerError } = await supabase
+    const { data: customer, error: customerError } = await supabaseAdmin
       .from("customers")
       .select("*")
       .eq("id", customerId)
@@ -1283,7 +1283,7 @@ export async function getCustomerWithTickets(
     if (customerError && customerError.code !== "PGRST116") throw customerError;
     if (!customer) return null;
 
-    const { data: tickets, error: ticketsError } = await supabase
+    const { data: tickets, error: ticketsError } = await supabaseAdmin
       .from("support_tickets")
       .select("*")
       .eq("customer_id", customerId)
@@ -1308,7 +1308,7 @@ export async function updateCustomer(
   >,
 ): Promise<CustomerRecord | null> {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from("customers")
       .update(updates)
       .eq("id", customerId)
@@ -1338,7 +1338,7 @@ export async function addCustomerNote(
   note: string,
 ): Promise<CustomerNoteRecord | null> {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from("customer_notes")
       .insert([
         {
@@ -1364,7 +1364,7 @@ export async function getCustomerNotes(
   (CustomerNoteRecord & { created_by?: { full_name: string; email: string } })[]
 > {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from("customer_notes")
       .select("*, users(full_name, email)")
       .eq("customer_id", customerId)
@@ -1383,14 +1383,21 @@ export async function getCustomerNotes(
 export async function addTagToCustomer(
   customerId: string,
   tag: string,
+  organizationId?: string,
 ): Promise<boolean> {
   try {
     // Get current tags
-    const { data: customer, error: fetchError } = await supabase
+    const query = supabaseAdmin
       .from("customers")
-      .select("tags")
-      .eq("id", customerId)
-      .single();
+      .select("tags, organization_id")
+      .eq("id", customerId);
+
+    // If organization ID is provided, validate it
+    if (organizationId) {
+      query.eq("organization_id", organizationId);
+    }
+
+    const { data: customer, error: fetchError } = await query.single();
 
     if (fetchError) throw fetchError;
     if (!customer) return false;
@@ -1405,7 +1412,7 @@ export async function addTagToCustomer(
 
     const newTags = [...currentTags, normalizedTag];
 
-    const { error: updateError } = await supabase
+    const { error: updateError } = await supabaseAdmin
       .from("customers")
       .update({ tags: newTags })
       .eq("id", customerId);
@@ -1421,13 +1428,20 @@ export async function addTagToCustomer(
 export async function removeTagFromCustomer(
   customerId: string,
   tag: string,
+  organizationId?: string,
 ): Promise<boolean> {
   try {
-    const { data: customer, error: fetchError } = await supabase
+    const query = supabaseAdmin
       .from("customers")
-      .select("tags")
-      .eq("id", customerId)
-      .single();
+      .select("tags, organization_id")
+      .eq("id", customerId);
+
+    // If organization ID is provided, validate it
+    if (organizationId) {
+      query.eq("organization_id", organizationId);
+    }
+
+    const { data: customer, error: fetchError } = await query.single();
 
     if (fetchError) throw fetchError;
     if (!customer) return false;
@@ -1436,7 +1450,7 @@ export async function removeTagFromCustomer(
     const normalizedTag = tag.toLowerCase().trim();
     const newTags = currentTags.filter((t) => t !== normalizedTag);
 
-    const { error: updateError } = await supabase
+    const { error: updateError } = await supabaseAdmin
       .from("customers")
       .update({ tags: newTags })
       .eq("id", customerId);
@@ -1451,7 +1465,7 @@ export async function removeTagFromCustomer(
 
 export async function getCustomerTags(customerId: string): Promise<string[]> {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from("customers")
       .select("tags")
       .eq("id", customerId)
@@ -1472,7 +1486,7 @@ export async function getCustomersWithTag(
   try {
     const normalizedTag = tag.toLowerCase().trim();
 
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from("customers")
       .select("*, support_tickets(count)")
       .eq("organization_id", organizationId)
@@ -1496,7 +1510,7 @@ export async function getOrganizationTags(
 ): Promise<{ tag: string; count: number }[]> {
   try {
     // Get all customers and their tags
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from("customers")
       .select("tags")
       .eq("organization_id", organizationId)
@@ -1526,13 +1540,18 @@ export async function getOrganizationTags(
 export async function bulkAddTagToCustomers(
   customerIds: string[],
   tag: string,
+  organizationId?: string,
 ): Promise<number> {
   try {
     let successCount = 0;
     const normalizedTag = tag.toLowerCase().trim();
 
     for (const customerId of customerIds) {
-      const success = await addTagToCustomer(customerId, normalizedTag);
+      const success = await addTagToCustomer(
+        customerId,
+        normalizedTag,
+        organizationId,
+      );
       if (success) successCount++;
     }
 

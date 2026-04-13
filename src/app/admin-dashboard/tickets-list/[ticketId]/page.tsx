@@ -2,7 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { ArrowLeft, User, Mail, Calendar, StickyNote } from "lucide-react";
+import {
+  ArrowLeft,
+  User,
+  Mail,
+  Calendar,
+  StickyNote,
+  Phone,
+  Building,
+} from "lucide-react";
 import { toast } from "react-toastify";
 import { handleAdminApiAuthRedirect } from "@/lib/admin-api-client";
 
@@ -13,9 +21,16 @@ interface TicketDetailsData {
   description: string;
   createdAt: string;
   internalNotes?: string;
-  users?: {
+  user?: {
     fullName?: string;
     email?: string;
+    role?: string;
+  };
+  customer?: {
+    fullName?: string;
+    email?: string;
+    phone?: string;
+    companyName?: string;
   };
 }
 
@@ -81,74 +96,200 @@ export default function TicketDetails() {
   };
 
   if (isLoading) {
-    return <div className="text-center">
-          <div className="inline-flex h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
-          <p className="p-10 text-center mt-4 text-muted-foreground">Loading ticket details...</p>
-    </div>;
+    return (
+      <div
+        className="min-h-screen bg-background flex items-center justify-center p-8"
+        style={{
+          fontFamily:
+            "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif",
+        }}
+      >
+        <div className="flex flex-col items-center gap-4">
+          <div className="flex gap-2">
+            <div className="w-2 h-2 bg-primary rounded-full animate-bounce"></div>
+            <div
+              className="w-2 h-2 bg-primary rounded-full animate-bounce"
+              style={{ animationDelay: "0.1s" }}
+            ></div>
+            <div
+              className="w-2 h-2 bg-primary rounded-full animate-bounce"
+              style={{ animationDelay: "0.2s" }}
+            ></div>
+          </div>
+          <p className="text-muted-foreground font-medium">
+            Loading ticket details...
+          </p>
+        </div>
+      </div>
+    );
   }
 
   if (!ticket) {
-    return <div className="p-10 text-center">Ticket not found.</div>;
+    return (
+      <div
+        className="min-h-screen bg-background flex items-center justify-center p-8"
+        style={{
+          fontFamily:
+            "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif",
+        }}
+      >
+        <div className="flex flex-col items-center gap-4">
+          <p className="text-red-600 text-lg font-medium">Ticket not found</p>
+          <button
+            onClick={() => router.back()}
+            className="px-4 py-2 bg-primary text-white rounded-lg hover:opacity-90 transition-opacity font-medium"
+          >
+            Back to Tickets
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="max-w-4xl mx-auto p-6 space-y-6">
-      <button
-        onClick={() => router.back()}
-        className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="h-4 w-4" /> Back to Tickets
-      </button>
+    <div
+      className="min-h-screen bg-background"
+      style={{
+        fontFamily:
+          "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif",
+      }}
+    >
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+        <button
+          onClick={() => router.back()}
+          className="flex items-center gap-2 text-sm font-medium text-primary hover:opacity-80 transition-opacity"
+        >
+          <ArrowLeft className="h-4 w-4" /> Back to Tickets
+        </button>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Main Content */}
-        <div className="md:col-span-2 space-y-6">
-          <div className="bg-card border rounded-lg p-6">
-            <h1 className="text-2xl font-bold">{ticket.title}</h1>
-            <p className="text-sm text-muted-foreground mt-2">
-              Ticket ID: {ticket.ticketId || ticket.id}
-            </p>
-            <p className="mt-4 text-foreground whitespace-pre-wrap">
-              {ticket.description}
-            </p>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Main Content */}
+          <div className="lg:col-span-2 space-y-6">
+            <div className="bg-card border border-border rounded-lg p-6">
+              <h1 className="text-3xl font-bold text-foreground">
+                {ticket.title}
+              </h1>
+              <p className="text-sm text-muted-foreground mt-3 font-medium">
+                Ticket ID:{" "}
+                <span className="text-foreground font-semibold">
+                  {ticket.ticketId || ticket.id}
+                </span>
+              </p>
+              <p className="mt-6 text-foreground whitespace-pre-wrap leading-relaxed">
+                {ticket.description}
+              </p>
+            </div>
+
+            <div className="bg-card border border-border rounded-lg p-6">
+              <h3 className="flex items-center gap-2 font-semibold text-foreground mb-4">
+                <StickyNote className="h-5 w-5 text-primary" /> Internal Admin
+                Notes
+              </h3>
+              <textarea
+                className="w-full h-32 p-3 bg-muted/50 border border-border rounded-lg text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none"
+                placeholder="Add notes only visible to admins..."
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+              />
+              <button
+                onClick={saveNote}
+                disabled={isSaving}
+                className="mt-4 px-4 py-2 bg-primary text-white rounded-lg text-sm hover:opacity-90 disabled:opacity-50 transition-opacity font-medium"
+              >
+                {isSaving ? "Saving..." : "Save Note"}
+              </button>
+            </div>
           </div>
 
-          <div className="bg-card border rounded-lg p-6">
-            <h3 className="flex items-center gap-2 font-semibold mb-4">
-              <StickyNote className="h-4 w-4" /> Internal Admin Notes
-            </h3>
-            <textarea
-              className="w-full h-32 p-3 bg-secondary/30 border rounded-md text-sm focus:ring-1 focus:ring-primary outline-none"
-              placeholder="Add notes only visible to admins..."
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-            />
-            <button
-              onClick={saveNote}
-              disabled={isSaving}
-              className="mt-2 px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium"
-            >
-              {isSaving ? "Saving..." : "Save Note"}
-            </button>
-          </div>
-        </div>
+          {/* Sidebar Info */}
+          <div className="space-y-6">
+            <div className="bg-card border border-border rounded-lg p-6">
+              <h3 className="font-semibold text-foreground mb-5">
+                Customer Information
+              </h3>
+              <div className="space-y-4">
+                <div className="pb-4 border-b border-border">
+                  <div className="flex items-start gap-3">
+                    <User className="h-4 w-4 text-primary mt-1" />
+                    <div className="flex-1">
+                      <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
+                        Name
+                      </p>
+                      <p className="text-sm text-foreground font-semibold mt-1">
+                        {ticket.customer?.fullName || "N/A"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
 
-        {/* Sidebar Info */}
-        <div className="space-y-6">
-          <div className="bg-card border rounded-lg p-6">
-            <h3 className="font-semibold mb-4">Customer Info</h3>
-            <div className="space-y-4 text-sm">
-              <div className="flex items-center gap-2">
-                <User className="h-4 w-4 text-muted-foreground" />{" "}
-                {ticket.users?.fullName}
-              </div>
-              <div className="flex items-center gap-2">
-                <Mail className="h-4 w-4 text-muted-foreground" />{" "}
-                {ticket.users?.email}
-              </div>
-              <div className="flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-muted-foreground" />{" "}
-                {new Date(ticket.createdAt).toLocaleDateString()}
+                <div className="pb-4 border-b border-border">
+                  <div className="flex items-start gap-3">
+                    <Mail className="h-4 w-4 text-primary mt-1" />
+                    <div className="flex-1">
+                      <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
+                        Email
+                      </p>
+                      <p className="text-sm text-foreground font-semibold mt-1">
+                        {ticket.customer?.email || "N/A"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {ticket.customer?.phone && (
+                  <div className="pb-4 border-b border-border">
+                    <div className="flex items-start gap-3">
+                      <Phone className="h-4 w-4 text-primary mt-1" />
+                      <div className="flex-1">
+                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
+                          Phone
+                        </p>
+                        <p className="text-sm text-foreground font-semibold mt-1">
+                          {ticket.customer.phone}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {ticket.customer?.companyName && (
+                  <div className="pb-4 border-b border-border">
+                    <div className="flex items-start gap-3">
+                      <Building className="h-4 w-4 text-primary mt-1" />
+                      <div className="flex-1">
+                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
+                          Company
+                        </p>
+                        <p className="text-sm text-foreground font-semibold mt-1">
+                          {ticket.customer.companyName}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <div className="flex items-start gap-3">
+                    <Calendar className="h-4 w-4 text-primary mt-1" />
+                    <div className="flex-1">
+                      <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
+                        Created
+                      </p>
+                      <p className="text-sm text-foreground font-semibold mt-1">
+                        {new Date(ticket.createdAt).toLocaleDateString(
+                          "en-US",
+                          {
+                            year: "numeric",
+                            month: "short",
+                            day: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          },
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

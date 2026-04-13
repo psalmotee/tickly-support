@@ -71,7 +71,7 @@ export default function InviteMemberPage() {
 
       setSuccess(`Invitation sent to ${email}`);
       setEmail("");
-      setRole("user");
+      setRole("agent");
 
       // Redirect after success
       setTimeout(() => {

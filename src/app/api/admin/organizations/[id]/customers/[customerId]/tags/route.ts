@@ -10,7 +10,7 @@ import {
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string; customerId: string }> }
+  { params }: { params: Promise<{ id: string; customerId: string }> },
 ) {
   try {
     const { id, customerId } = await params;
@@ -19,7 +19,7 @@ export async function GET(
     if (!session) {
       return NextResponse.json(
         { success: false, message: "Unauthorized" },
-        { status: 401 }
+        { status: 401 },
       );
     }
 
@@ -28,38 +28,32 @@ export async function GET(
     if (action === "org_tags") {
       // Get all tags in organization
       const tags = await getOrganizationTags(id);
-      return NextResponse.json(
-        { success: true, tags },
-        { status: 200 }
-      );
+      return NextResponse.json({ success: true, tags }, { status: 200 });
     }
 
     if (action === "by_tag") {
       // Get customers with specific tag
       const tag = request.nextUrl.searchParams.get("tag") || "";
       const customers = await getCustomersWithTag(id, tag);
-      return NextResponse.json(
-        { success: true, customers },
-        { status: 200 }
-      );
+      return NextResponse.json({ success: true, customers }, { status: 200 });
     }
 
     return NextResponse.json(
       { success: false, message: "Invalid action" },
-      { status: 400 }
+      { status: 400 },
     );
   } catch (error) {
     console.error("Error fetching tags:", error);
     return NextResponse.json(
       { success: false, message: "Internal server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string; customerId: string }> }
+  { params }: { params: Promise<{ id: string; customerId: string }> },
 ) {
   try {
     const { id, customerId } = await params;
@@ -68,7 +62,7 @@ export async function POST(
     if (!session) {
       return NextResponse.json(
         { success: false, message: "Unauthorized" },
-        { status: 401 }
+        { status: 401 },
       );
     }
 
@@ -76,32 +70,32 @@ export async function POST(
     const { action, tag, tags } = body;
 
     if (action === "add_tag") {
-      const success = await addTagToCustomer(customerId, tag);
+      const success = await addTagToCustomer(customerId, tag, id);
       if (!success) {
         return NextResponse.json(
           { success: false, message: "Failed to add tag" },
-          { status: 400 }
+          { status: 400 },
         );
       }
 
       return NextResponse.json(
         { success: true, message: "Tag added successfully" },
-        { status: 201 }
+        { status: 201 },
       );
     }
 
     if (action === "remove_tag") {
-      const success = await removeTagFromCustomer(customerId, tag);
+      const success = await removeTagFromCustomer(customerId, tag, id);
       if (!success) {
         return NextResponse.json(
           { success: false, message: "Failed to remove tag" },
-          { status: 400 }
+          { status: 400 },
         );
       }
 
       return NextResponse.json(
         { success: true, message: "Tag removed successfully" },
-        { status: 200 }
+        { status: 200 },
       );
     }
 
@@ -109,11 +103,11 @@ export async function POST(
       if (!Array.isArray(tags) || !tag) {
         return NextResponse.json(
           { success: false, message: "Invalid bulk add parameters" },
-          { status: 400 }
+          { status: 400 },
         );
       }
 
-      const count = await bulkAddTagToCustomers(tags, tag);
+      const count = await bulkAddTagToCustomers(tags, tag, id);
 
       return NextResponse.json(
         {
@@ -121,19 +115,19 @@ export async function POST(
           message: `Tag added to ${count} customers`,
           count,
         },
-        { status: 201 }
+        { status: 201 },
       );
     }
 
     return NextResponse.json(
       { success: false, message: "Invalid action" },
-      { status: 400 }
+      { status: 400 },
     );
   } catch (error) {
     console.error("Error managing tags:", error);
     return NextResponse.json(
       { success: false, message: "Internal server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

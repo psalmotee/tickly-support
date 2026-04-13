@@ -32,9 +32,9 @@ interface Customer {
 
 export default function CustomerDetailPage() {
   const params = useParams();
-  const organizationId = (params.id as string) || "";
   const customerId = (params.customerId as string) || "";
 
+  const [organizationId, setOrganizationId] = useState<string>("");
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [notes, setNotes] = useState<Note[]>([]);
@@ -47,12 +47,33 @@ export default function CustomerDetailPage() {
   const [addingTag, setAddingTag] = useState(false);
 
   useEffect(() => {
-    if (!organizationId || !customerId) {
+    if (!customerId) {
       setLoading(false);
       return;
     }
-    loadCustomerDetails();
+    fetchCurrentOrganization();
+  }, [customerId]);
+
+  useEffect(() => {
+    if (organizationId && customerId) {
+      loadCustomerDetails();
+    }
   }, [organizationId, customerId]);
+
+  const fetchCurrentOrganization = async () => {
+    try {
+      const response = await fetch("/api/admin/organizations/current");
+      if (!response.ok) {
+        throw new Error("Failed to fetch organization");
+      }
+      const data = await response.json();
+      setOrganizationId(data.organization.id);
+    } catch (err) {
+      console.error("Error fetching current organization:", err);
+      toast.error("Failed to load organization");
+      setLoading(false);
+    }
+  };
 
   const loadCustomerDetails = async () => {
     try {
@@ -74,6 +95,7 @@ export default function CustomerDetailPage() {
       setTags(data.customer.tags || []);
     } catch (err) {
       console.error("Error loading customer:", err);
+      toast.error("Failed to load customer details");
       setError("Failed to load customer details");
     } finally {
       setLoading(false);
@@ -184,16 +206,51 @@ export default function CustomerDetailPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background p-8">
-        <p className="text-muted-foreground">Loading customer...</p>
+      <div
+        className="min-h-screen bg-background p-8"
+        style={{
+          fontFamily:
+            "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif",
+        }}
+      >
+        <div className="flex items-center justify-center h-screen flex-col gap-4">
+          <div className="flex gap-2">
+            <div className="w-2 h-2 bg-primary rounded-full animate-bounce"></div>
+            <div
+              className="w-2 h-2 bg-primary rounded-full animate-bounce"
+              style={{ animationDelay: "0.1s" }}
+            ></div>
+            <div
+              className="w-2 h-2 bg-primary rounded-full animate-bounce"
+              style={{ animationDelay: "0.2s" }}
+            ></div>
+          </div>
+          <p className="text-muted-foreground font-medium">
+            Loading customer...
+          </p>
+        </div>
       </div>
     );
   }
 
   if (!customer) {
     return (
-      <div className="min-h-screen bg-background p-8">
-        <p className="text-red-600">Customer not found</p>
+      <div
+        className="min-h-screen bg-background p-8"
+        style={{
+          fontFamily:
+            "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif",
+        }}
+      >
+        <div className="flex items-center justify-center h-screen flex-col gap-4">
+          <p className="text-red-600 text-lg font-medium">Customer not found</p>
+          <Link
+            href="/admin-dashboard/customers"
+            className="mt-4 px-4 py-2 bg-primary text-white rounded-lg hover:opacity-90 transition-opacity font-medium"
+          >
+            Back to Customers
+          </Link>
+        </div>
       </div>
     );
   }
@@ -225,8 +282,8 @@ export default function CustomerDetailPage() {
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {error && (
-          <div className="mb-6 p-4 rounded-lg border border-red-200 bg-red-50">
-            <p className="text-sm text-red-700">{error}</p>
+          <div className="mb-6 p-4 rounded-lg border border-red-200/50 bg-red-50/50 backdrop-blur-sm">
+            <p className="text-sm text-red-700 font-medium">{error}</p>
           </div>
         )}
 
@@ -294,7 +351,7 @@ export default function CustomerDetailPage() {
               <p className="text-sm text-muted-foreground mb-2">
                 Total Tickets
               </p>
-              <p className="text-3xl font-bold text-foreground">
+              <p className="text-4xl font-bold text-primary">
                 {tickets.length}
               </p>
             </div>
@@ -316,16 +373,16 @@ export default function CustomerDetailPage() {
                     {tags.map((tag) => (
                       <div
                         key={tag}
-                        className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-50 text-blue-700 text-sm font-medium border border-blue-200 hover:bg-blue-100 transition-colors"
+                        className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-50 text-blue-700 text-sm font-semibold border border-blue-200 hover:bg-blue-100 transition-all group"
                       >
-                        <span>{tag}</span>
+                        <span className="capitalize">{tag}</span>
                         <button
                           onClick={() => handleRemoveTag(tag)}
                           disabled={addingTag}
-                          className="ml-1 hover:text-blue-900 disabled:opacity-50 transition-colors font-bold"
+                          className="ml-1 hover:text-blue-900 disabled:opacity-50 transition-colors font-bold text-base leading-none"
                           title="Remove tag"
                         >
-                          ×
+                          ✕
                         </button>
                       </div>
                     ))}
@@ -459,10 +516,10 @@ export default function CustomerDetailPage() {
                     {notes.map((note) => (
                       <div
                         key={note.id}
-                        className="p-3 rounded-lg bg-muted border border-border"
+                        className="p-4 rounded-lg bg-muted/50 border border-border/50 hover:border-border transition-colors"
                       >
                         <p className="text-sm text-foreground">{note.note}</p>
-                        <p className="text-xs text-muted-foreground mt-2">
+                        <p className="text-xs text-muted-foreground mt-2.5 font-medium">
                           {note.created_by?.full_name} •{" "}
                           {formatDate(note.created_at)}
                         </p>
