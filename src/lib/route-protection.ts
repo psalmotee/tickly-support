@@ -4,7 +4,7 @@ import type { AuthSession } from "./auth-client";
 
 export type AppRole = "admin" | "user";
 
-const AUTH_PAGES = new Set(["/", "/login", "/signup"]);
+const AUTH_PAGES = new Set(["/", "/login", "/signup", "/widget"]);
 
 export function checkUserRole(
   session: AuthSession | null,

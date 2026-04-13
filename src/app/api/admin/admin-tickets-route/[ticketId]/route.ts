@@ -1,18 +1,12 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { supabaseAdmin } from "@/lib/supabase-client";
 import { getRequestSessionUser } from "@/lib/server-session";
 import {
-  getTicketById,
   getCustomerById,
   getWebsiteById,
-  updateTicket,
+  type TicketRecord,
 } from "@/lib/supabase-helpers";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || "",
-  process.env.SUPABASE_SERVICE_KEY || "",
-);
 
 const VALID_STATUSES = ["open", "in_progress", "resolved", "closed"];
 
@@ -51,10 +45,20 @@ export async function GET(
     }
 
     const { ticketId } = await context.params;
-    const ticket = await getTicketById(ticketId);
 
-    if (!ticket) {
-      console.error("[admin-tickets][GET] Ticket not found:", ticketId);
+    // Fetch ticket using supabaseAdmin to bypass RLS
+    const { data: ticket, error: ticketError } = await supabaseAdmin
+      .from("support_tickets")
+      .select("*")
+      .eq("id", ticketId)
+      .single();
+
+    if (ticketError || !ticket) {
+      console.error(
+        "[admin-tickets][GET] Ticket not found:",
+        ticketId,
+        ticketError,
+      );
       return NextResponse.json(
         { success: false, error: "Ticket not found" },
         { status: 404 },
@@ -64,7 +68,7 @@ export async function GET(
     // Fetch user data if ticket has a user_id
     let user = null;
     if (ticket.user_id) {
-      const { data: userData } = await supabase
+      const { data: userData } = await supabaseAdmin
         .from("users")
         .select("id, full_name, email, role")
         .eq("id", ticket.user_id)
@@ -169,8 +173,8 @@ export async function POST(
 
     const { ticketId } = await context.params;
 
-    // Update ticket internal notes
-    const { error } = await supabase
+    // Update ticket internal notes (use supabaseAdmin to bypass RLS)
+    const { error } = await supabaseAdmin
       .from("support_tickets")
       .update({
         internal_notes: note,
@@ -239,10 +243,20 @@ export async function PATCH(
       categoryId?: string | null;
     };
 
-    // Fetch current ticket
-    const ticket = await getTicketById(ticketId);
+    // Fetch current ticket using supabaseAdmin to bypass RLS
+    console.log("[admin-tickets][PATCH] Fetching ticket:", ticketId);
+    const { data: ticket, error: ticketError } = await supabaseAdmin
+      .from("support_tickets")
+      .select("*")
+      .eq("id", ticketId)
+      .single();
 
-    if (!ticket) {
+    if (ticketError || !ticket) {
+      console.error(
+        "[admin-tickets][PATCH] Ticket not found:",
+        ticketId,
+        ticketError,
+      );
       return NextResponse.json(
         { success: false, error: "Ticket not found" },
         { status: 404 },
@@ -281,7 +295,9 @@ export async function PATCH(
     }
 
     // Prepare update payload
-    const updatePayload: Record<string, any> = {};
+    const updatePayload: Record<string, any> = {
+      updated_at: new Date().toISOString(),
+    };
 
     if (status) {
       updatePayload.status = status.toLowerCase();
@@ -310,11 +326,23 @@ export async function PATCH(
       updatePayload.category_id = categoryId;
     }
 
-    // Update ticket using helper function
-    const updatedTicket = await updateTicket(ticketId, updatePayload);
+    // Update ticket using supabaseAdmin to bypass RLS
+    console.log(
+      "[admin-tickets][PATCH] Updating ticket with payload:",
+      updatePayload,
+    );
+    const { data: updatedTicket, error: updateError } = await supabaseAdmin
+      .from("support_tickets")
+      .update(updatePayload)
+      .eq("id", ticketId)
+      .select()
+      .single();
 
-    if (!updatedTicket) {
-      console.error("[admin-tickets][PATCH] Failed to update ticket");
+    if (updateError || !updatedTicket) {
+      console.error(
+        "[admin-tickets][PATCH] Failed to update ticket:",
+        updateError,
+      );
       return NextResponse.json(
         { success: false, error: "Failed to update ticket" },
         { status: 500 },

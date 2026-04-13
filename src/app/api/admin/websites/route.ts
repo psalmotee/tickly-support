@@ -1,11 +1,11 @@
 // used
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { randomUUID } from "crypto";
 import { getRequestSessionUser } from "@/lib/server-session";
 import { supabaseAdmin } from "@/lib/supabase-client";
 import {
   getOrganizationWebsites,
-  createWebsite,
   getOrganizationById,
 } from "@/lib/supabase-helpers";
 
@@ -68,7 +68,15 @@ export async function GET(req: NextRequest) {
     console.log("[websites][GET] Fetching websites for org:", organizationId);
     const websites = await getOrganizationWebsites(organizationId);
 
-    console.log("[websites][GET] Found websites:", websites.length);
+    console.log("[websites][GET] Found websites:", {
+      count: websites.length,
+      websites: websites.map((w) => ({
+        id: w.id,
+        name: w.name,
+        domain: w.domain,
+        is_active: w.is_active,
+      })),
+    });
     return NextResponse.json({
       success: true,
       websites,
@@ -164,17 +172,72 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Create website
-    const website = await createWebsite({
+    // Create website using supabaseAdmin to bypass RLS
+    console.log("[websites][POST] Creating website with data:", {
       organization_id: organizationId,
       name: name.trim(),
       domain: domain.trim().toLowerCase(),
-      description: description ? description.trim() : null,
-      logo_url: logo_url || null,
-      primary_color,
-      api_key: null,
-      is_active: true,
     });
+
+    const widgetToken = randomUUID();
+
+    const { data: website, error: createError } = await supabaseAdmin
+      .from("websites")
+      .insert([
+        {
+          organization_id: organizationId,
+          name: name.trim(),
+          domain: domain.trim().toLowerCase(),
+          description: description ? description.trim() : null,
+          logo_url: logo_url || null,
+          primary_color,
+          widget_token: widgetToken,
+          api_key: null,
+          is_active: true,
+        },
+      ])
+      .select()
+      .single();
+
+    if (createError) {
+      console.error("[websites][POST] Error creating website:", {
+        code: createError.code,
+        message: createError.message,
+        details: createError.details,
+      });
+
+      // Check for duplicate domain/name errors
+      if (createError.code === "23505") {
+        // Unique constraint violation
+        if (createError.message.includes("domain")) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: "This domain already exists for your organization",
+            },
+            { status: 409 },
+          );
+        } else if (createError.message.includes("name")) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: "This website name already exists for your organization",
+            },
+            { status: 409 },
+          );
+        }
+      }
+
+      return NextResponse.json(
+        {
+          success: false,
+          error: createError.message || "Failed to create website",
+        },
+        { status: 500 },
+      );
+    }
+
+    console.log("[websites][POST] Website created:", website);
 
     if (!website) {
       return NextResponse.json(
@@ -192,7 +255,10 @@ export async function POST(req: NextRequest) {
       { status: 201 },
     );
   } catch (error: unknown) {
-    console.error("[websites][POST] Failed to create website", { error });
+    console.error("[websites][POST] Failed to create website", {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
     return NextResponse.json(
       { success: false, error: "Failed to create website" },
       { status: 500 },

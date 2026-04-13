@@ -7,6 +7,7 @@
  * Replaces MantaHQ SDK usage throughout the app
  */
 
+import { randomUUID } from "crypto";
 import { supabase, supabaseAdmin } from "./supabase-client";
 
 // ====== USERS ======
@@ -798,7 +799,7 @@ export async function getWebsiteByToken(
   widgetToken: string,
 ): Promise<WebsiteRecord | null> {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from("websites")
       .select("*")
       .eq("widget_token", widgetToken)
@@ -1646,7 +1647,7 @@ export async function getOrganizationWebsites(
   organizationId: string,
 ): Promise<WebsiteRecord[]> {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from("websites")
       .select("*")
       .eq("organization_id", organizationId)
@@ -1735,33 +1736,92 @@ export async function createWidgetTicket(
   ticketData: WidgetTicketData,
 ): Promise<TicketRecord | null> {
   try {
-    // Get website
-    const website = await getWebsiteById(ticketData.websiteId);
-    if (!website) {
-      console.error("Website not found:", ticketData.websiteId);
-      return null;
-    }
-
-    // Create or get customer
-    const customer = await createOrUpdateCustomer(
-      website.organization_id,
-      ticketData.email,
-      {
-        full_name: ticketData.name,
-        phone: ticketData.phone,
-      },
+    console.log(
+      "[createWidgetTicket] Starting ticket creation for website:",
+      ticketData.websiteId,
     );
 
+    // Get website (use supabaseAdmin to bypass RLS for public endpoint)
+    console.log("[createWidgetTicket] Fetching website...");
+    const { data: website, error: websiteError } = await supabaseAdmin
+      .from("websites")
+      .select("*")
+      .eq("id", ticketData.websiteId)
+      .single();
+
+    if (websiteError || !website) {
+      console.error(
+        "[createWidgetTicket] Website not found:",
+        ticketData.websiteId,
+        websiteError,
+      );
+      return null;
+    }
+    console.log("[createWidgetTicket] Website found:", website.id);
+
+    // Create or get customer (use supabaseAdmin to bypass RLS)
+    console.log(
+      "[createWidgetTicket] Looking up customer with email:",
+      ticketData.email.toLowerCase(),
+    );
+    const { data: existingCustomer, error: existingError } = await supabaseAdmin
+      .from("customers")
+      .select("*")
+      .eq("organization_id", website.organization_id)
+      .eq("email", ticketData.email.toLowerCase())
+      .single();
+
+    if (existingError && existingError.code !== "PGRST116") {
+      console.error(
+        "[createWidgetTicket] Error looking up customer:",
+        existingError,
+      );
+    }
+
+    let customer = existingCustomer;
+
     if (!customer) {
-      console.error("Failed to create/get customer");
+      console.log(
+        "[createWidgetTicket] Customer not found, creating new one...",
+      );
+      const { data: newCustomer, error: customerError } = await supabaseAdmin
+        .from("customers")
+        .insert([
+          {
+            organization_id: website.organization_id,
+            email: ticketData.email.toLowerCase(),
+            full_name: ticketData.name,
+            phone: ticketData.phone || null,
+          },
+        ])
+        .select()
+        .single();
+
+      if (customerError) {
+        console.error(
+          "[createWidgetTicket] Failed to create customer:",
+          customerError,
+        );
+        return null;
+      }
+      customer = newCustomer;
+      console.log("[createWidgetTicket] Customer created:", customer.id);
+    } else {
+      console.log("[createWidgetTicket] Using existing customer:", customer.id);
+    }
+
+    if (!customer) {
+      console.error("[createWidgetTicket] Failed to create/get customer");
       return null;
     }
 
-    // Generate public token for customer access
-    const publicToken = `pt_${generateSecureToken()}`;
+    // Generate public token for customer access (use plain UUID, not prefixed)
+    const publicToken = randomUUID();
+    console.log("[createWidgetTicket] Generated public token");
 
-    // Create ticket
-    const { data, error } = await supabase
+    // Create ticket (use supabaseAdmin to bypass RLS)
+    console.log("[createWidgetTicket] Creating support ticket...");
+    const { data, error } = await supabaseAdmin
       .from("support_tickets")
       .insert([
         {
@@ -1782,10 +1842,22 @@ export async function createWidgetTicket(
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error("[createWidgetTicket] Error inserting ticket:", {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+      });
+      throw error;
+    }
+
+    console.log("[createWidgetTicket] Ticket created successfully:", data.id);
     return data as TicketRecord;
   } catch (error) {
-    console.error("Error creating widget ticket:", error);
+    console.error("[createWidgetTicket] Exception:", {
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
     return null;
   }
 }

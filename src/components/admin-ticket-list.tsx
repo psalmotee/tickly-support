@@ -64,9 +64,8 @@ export function AdminTicketList({ onStatsChange }: AdminTicketListProps) {
           onStatsChange({
             total: nextTickets.length,
             open: nextTickets.filter((t) => t.status === "open").length,
-            inProgress: nextTickets.filter(
-              (t) => t.status === "in-progress",
-            ).length,
+            inProgress: nextTickets.filter((t) => t.status === "in-progress")
+              .length,
             closed: nextTickets.filter((t) => t.status === "closed").length,
           });
         }
@@ -82,7 +81,7 @@ export function AdminTicketList({ onStatsChange }: AdminTicketListProps) {
 
   const handleStatusChange = async (
     ticket: Ticket,
-    status: "open" | "in-progress" | "closed",
+    status: "open" | "in_progress" | "resolved" | "closed",
   ) => {
     try {
       if (ticket.deletedByAdmin) {
@@ -152,8 +151,10 @@ export function AdminTicketList({ onStatsChange }: AdminTicketListProps) {
     switch (status) {
       case "open":
         return "bg-amber-500/10 text-amber-700 border-amber-200";
-      case "in-progress":
+      case "in_progress":
         return "bg-blue-500/10 text-blue-700 border-blue-200";
+      case "resolved":
+        return "bg-green-500/10 text-green-700 border-green-200";
       case "closed":
         return "bg-green-500/10 text-green-700 border-green-200";
       default:
@@ -175,8 +176,8 @@ export function AdminTicketList({ onStatsChange }: AdminTicketListProps) {
   };
 
   const getStatusLabel = (status: string) => {
-    if (status === "closed") return "Resolved";
-    if (status === "in-progress") return "In Progress";
+    if (status === "closed" || status === "resolved") return "Resolved";
+    if (status === "in_progress") return "In Progress";
     return status.charAt(0).toUpperCase() + status.slice(1);
   };
 
@@ -272,19 +273,24 @@ export function AdminTicketList({ onStatsChange }: AdminTicketListProps) {
                         </button>
                         {editingId === ticket.id && (
                           <div className="absolute top-full mt-1 left-0 z-10 rounded-lg border border-border bg-card shadow-lg">
-                            {(["open", "in-progress", "closed"] as const).map(
-                              (status) => (
-                                <button
-                                  key={status}
-                                  onClick={() =>
-                                    handleStatusChange(ticket, status)
-                                  }
-                                  className="block w-full px-4 py-2 text-left text-sm text-foreground hover:bg-secondary first:rounded-t-lg last:rounded-b-lg transition-colors"
-                                >
-                                  {getStatusLabel(status)}
-                                </button>
-                              ),
-                            )}
+                            {(
+                              [
+                                "open",
+                                "in_progress",
+                                "resolved",
+                                // "closed",
+                              ] as const
+                            ).map((status) => (
+                              <button
+                                key={status}
+                                onClick={() =>
+                                  handleStatusChange(ticket, status)
+                                }
+                                className="block w-full px-4 py-2 text-left text-sm text-foreground hover:bg-secondary first:rounded-t-lg last:rounded-b-lg transition-colors"
+                              >
+                                {getStatusLabel(status)}
+                              </button>
+                            ))}
                           </div>
                         )}
                       </div>

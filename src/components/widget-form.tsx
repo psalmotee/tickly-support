@@ -2,6 +2,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { toast } from "react-toastify";
 
 interface CustomField {
   id: string;
@@ -47,10 +48,23 @@ export function WidgetForm({
   const [loadingFields, setLoadingFields] = useState(false);
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const [error, setError] = useState("");
 
+  // Design system colors for embedded widgets
   const primaryColor = theme.primaryColor || "#3b82f6";
-  const fontFamily = theme.fontFamily || "system-ui, -apple-system, sans-serif";
+  const fontFamily =
+    theme.fontFamily ||
+    "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif";
+  const colors = {
+    foreground: "#1f2937",
+    mutedForeground: "#6b7280",
+    border: "#e5e7eb",
+    background: "#ffffff",
+    cardBg: "#f9fafb",
+    errorBg: "#fee2e2",
+    errorFg: "#991b1b",
+    successBg: "#dcfce7",
+    successFg: "#166534",
+  };
 
   // Load custom fields for the organization
   useEffect(() => {
@@ -91,27 +105,30 @@ export function WidgetForm({
   ) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
-    setError("");
   };
 
   const renderCustomField = (field: CustomField) => {
     const value = customFieldValues[field.id] || "";
     const inputStyle = {
       width: "100%",
-      padding: "10px",
-      border: "1px solid #d1d5db",
+      padding: "10px 12px",
+      border: `1px solid ${colors.border}`,
       borderRadius: "6px",
       fontSize: "14px",
       boxSizing: "border-box" as const,
       fontFamily: "inherit",
+      color: colors.foreground,
+      backgroundColor: colors.background,
+      transition: "border-color 0.2s",
     };
 
     const labelStyle = {
       display: "block" as const,
       marginBottom: "6px",
-      fontSize: "14px",
-      fontWeight: "500" as const,
-      color: "#374151",
+      fontSize: "13px",
+      fontWeight: "600" as const,
+      color: colors.foreground,
+      letterSpacing: "0.3px",
     };
 
     if (field.field_type === "select") {
@@ -193,12 +210,14 @@ export function WidgetForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError("");
 
     // Validate required custom fields
     for (const field of customFields) {
       if (field.required && !customFieldValues[field.id]?.trim()) {
-        setError(`${field.label} is required`);
+        toast.error(`${field.label} is required`, {
+          position: "top-right",
+          autoClose: 3000,
+        });
         setLoading(false);
         return;
       }
@@ -221,6 +240,15 @@ export function WidgetForm({
         const data = await response.json();
         throw new Error(data.message || "Failed to submit ticket");
       }
+
+      // Success notification
+      toast.success(
+        "✓ Ticket submitted successfully! We'll get back to you soon.",
+        {
+          position: "top-right",
+          autoClose: 4000,
+        },
+      );
 
       setSubmitted(true);
       setFormData({
@@ -247,7 +275,12 @@ export function WidgetForm({
         setSubmitted(false);
       }, 3000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
+      const errorMessage =
+        err instanceof Error ? err.message : "An error occurred";
+      toast.error(errorMessage, {
+        position: "top-right",
+        autoClose: 3000,
+      });
     } finally {
       setLoading(false);
     }
@@ -259,26 +292,60 @@ export function WidgetForm({
         fontFamily,
         maxWidth: "500px",
         margin: "0 auto",
-        padding: "20px",
+        padding: "24px",
+        backgroundColor: colors.background,
       }}
     >
       {submitted ? (
         <div
           style={{
             padding: "16px",
-            backgroundColor: "#dcfce7",
+            backgroundColor: colors.successBg,
             borderRadius: "8px",
             textAlign: "center",
           }}
         >
-          <h3 style={{ color: "#166534", marginTop: 0 }}>✓ Ticket Submitted</h3>
-          <p style={{ color: "#15803d", marginBottom: 0 }}>
+          <h3
+            style={{
+              color: colors.successFg,
+              marginTop: 0,
+              marginBottom: "8px",
+            }}
+          >
+            ✓ Ticket Submitted
+          </h3>
+          <p
+            style={{
+              color: colors.successFg,
+              marginBottom: 0,
+              fontSize: "14px",
+            }}
+          >
             We'll get back to you soon!
           </p>
         </div>
       ) : (
         <form onSubmit={handleSubmit}>
-          <h2 style={{ marginTop: 0, color: primaryColor }}>Get Help</h2>
+          <h2
+            style={{
+              marginTop: 0,
+              marginBottom: "4px",
+              color: colors.foreground,
+              fontSize: "24px",
+              fontWeight: "700",
+            }}
+          >
+            Get Help
+          </h2>
+          <p
+            style={{
+              marginBottom: "20px",
+              color: colors.mutedForeground,
+              fontSize: "14px",
+            }}
+          >
+            We're here to help. Fill out the form below.
+          </p>
 
           <div style={{ marginBottom: "16px" }}>
             <label
@@ -286,12 +353,13 @@ export function WidgetForm({
               style={{
                 display: "block",
                 marginBottom: "6px",
-                fontSize: "14px",
-                fontWeight: "500",
-                color: "#374151",
+                fontSize: "13px",
+                fontWeight: "600",
+                color: colors.foreground,
+                letterSpacing: "0.3px",
               }}
             >
-              Name
+              Name <span style={{ color: primaryColor }}>*</span>
             </label>
             <input
               id="name"
@@ -302,14 +370,16 @@ export function WidgetForm({
               required
               style={{
                 width: "100%",
-                padding: "10px",
-                border: "1px solid #d1d5db",
+                padding: "10px 12px",
+                border: `1px solid ${colors.border}`,
                 borderRadius: "6px",
                 fontSize: "14px",
                 boxSizing: "border-box",
                 fontFamily: "inherit",
+                color: colors.foreground,
+                backgroundColor: colors.background,
               }}
-              placeholder="Your name"
+              placeholder="Your full name"
             />
           </div>
 
@@ -319,12 +389,13 @@ export function WidgetForm({
               style={{
                 display: "block",
                 marginBottom: "6px",
-                fontSize: "14px",
-                fontWeight: "500",
-                color: "#374151",
+                fontSize: "13px",
+                fontWeight: "600",
+                color: colors.foreground,
+                letterSpacing: "0.3px",
               }}
             >
-              Email
+              Email <span style={{ color: primaryColor }}>*</span>
             </label>
             <input
               id="email"
@@ -335,12 +406,14 @@ export function WidgetForm({
               required
               style={{
                 width: "100%",
-                padding: "10px",
-                border: "1px solid #d1d5db",
+                padding: "10px 12px",
+                border: `1px solid ${colors.border}`,
                 borderRadius: "6px",
                 fontSize: "14px",
                 boxSizing: "border-box",
                 fontFamily: "inherit",
+                color: colors.foreground,
+                backgroundColor: colors.background,
               }}
               placeholder="your@email.com"
             />
@@ -352,9 +425,10 @@ export function WidgetForm({
               style={{
                 display: "block",
                 marginBottom: "6px",
-                fontSize: "14px",
-                fontWeight: "500",
-                color: "#374151",
+                fontSize: "13px",
+                fontWeight: "600",
+                color: colors.foreground,
+                letterSpacing: "0.3px",
               }}
             >
               Phone
@@ -367,14 +441,16 @@ export function WidgetForm({
               onChange={handleChange}
               style={{
                 width: "100%",
-                padding: "10px",
-                border: "1px solid #d1d5db",
+                padding: "10px 12px",
+                border: `1px solid ${colors.border}`,
                 borderRadius: "6px",
                 fontSize: "14px",
                 boxSizing: "border-box",
                 fontFamily: "inherit",
+                color: colors.foreground,
+                backgroundColor: colors.background,
               }}
-              placeholder="Optional"
+              placeholder="+1 (555) 123-4567"
             />
           </div>
 
@@ -384,12 +460,13 @@ export function WidgetForm({
               style={{
                 display: "block",
                 marginBottom: "6px",
-                fontSize: "14px",
-                fontWeight: "500",
-                color: "#374151",
+                fontSize: "13px",
+                fontWeight: "600",
+                color: colors.foreground,
+                letterSpacing: "0.3px",
               }}
             >
-              Subject
+              Subject <span style={{ color: primaryColor }}>*</span>
             </label>
             <input
               id="subject"
@@ -400,12 +477,14 @@ export function WidgetForm({
               required
               style={{
                 width: "100%",
-                padding: "10px",
-                border: "1px solid #d1d5db",
+                padding: "10px 12px",
+                border: `1px solid ${colors.border}`,
                 borderRadius: "6px",
                 fontSize: "14px",
                 boxSizing: "border-box",
                 fontFamily: "inherit",
+                color: colors.foreground,
+                backgroundColor: colors.background,
               }}
               placeholder="What do you need help with?"
             />
@@ -417,9 +496,10 @@ export function WidgetForm({
               style={{
                 display: "block",
                 marginBottom: "6px",
-                fontSize: "14px",
-                fontWeight: "500",
-                color: "#374151",
+                fontSize: "13px",
+                fontWeight: "600",
+                color: colors.foreground,
+                letterSpacing: "0.3px",
               }}
             >
               Priority
@@ -431,18 +511,20 @@ export function WidgetForm({
               onChange={handleChange}
               style={{
                 width: "100%",
-                padding: "10px",
-                border: "1px solid #d1d5db",
+                padding: "10px 12px",
+                border: `1px solid ${colors.border}`,
                 borderRadius: "6px",
                 fontSize: "14px",
                 boxSizing: "border-box",
                 fontFamily: "inherit",
+                color: colors.foreground,
+                backgroundColor: colors.background,
               }}
             >
-              <option value="low">Low</option>
-              <option value="medium">Medium</option>
-              <option value="high">High</option>
-              <option value="critical">Critical</option>
+              <option value="low">Low - General inquiry</option>
+              <option value="medium">Medium - Something isn't working</option>
+              <option value="high">High - Urgent issue</option>
+              <option value="critical">Critical - System down</option>
             </select>
           </div>
 
@@ -452,12 +534,13 @@ export function WidgetForm({
               style={{
                 display: "block",
                 marginBottom: "6px",
-                fontSize: "14px",
-                fontWeight: "500",
-                color: "#374151",
+                fontSize: "13px",
+                fontWeight: "600",
+                color: colors.foreground,
+                letterSpacing: "0.3px",
               }}
             >
-              Message
+              Message <span style={{ color: primaryColor }}>*</span>
             </label>
             <textarea
               id="message"
@@ -465,31 +548,41 @@ export function WidgetForm({
               value={formData.message}
               onChange={handleChange}
               required
-              rows={6}
+              rows={5}
               style={{
                 width: "100%",
-                padding: "10px",
-                border: "1px solid #d1d5db",
+                padding: "10px 12px",
+                border: `1px solid ${colors.border}`,
                 borderRadius: "6px",
                 fontSize: "14px",
                 boxSizing: "border-box",
                 fontFamily: "inherit",
+                color: colors.foreground,
+                backgroundColor: colors.background,
                 resize: "vertical",
               }}
-              placeholder="Describe your issue in detail..."
+              placeholder="Please describe your issue in detail..."
             />
           </div>
 
           {/* Custom Fields */}
           {customFields.length > 0 && (
-            <div style={{ marginBottom: "16px" }}>
+            <div
+              style={{
+                marginBottom: "20px",
+                paddingTop: "16px",
+                borderTop: `1px solid ${colors.border}`,
+              }}
+            >
               <h3
                 style={{
                   marginTop: 0,
                   marginBottom: "12px",
-                  fontSize: "14px",
-                  fontWeight: "600",
-                  color: primaryColor,
+                  fontSize: "13px",
+                  fontWeight: "700",
+                  color: colors.foreground,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.5px",
                 }}
               >
                 Additional Information
@@ -498,39 +591,27 @@ export function WidgetForm({
             </div>
           )}
 
-          {error && (
-            <div
-              style={{
-                padding: "12px",
-                backgroundColor: "#fee2e2",
-                color: "#991b1b",
-                borderRadius: "6px",
-                marginBottom: "16px",
-                fontSize: "14px",
-              }}
-            >
-              {error}
-            </div>
-          )}
-
           <button
             type="submit"
             disabled={loading}
             style={{
               width: "100%",
-              padding: "12px",
+              padding: "12px 16px",
               backgroundColor: primaryColor,
               color: "white",
               border: "none",
               borderRadius: "6px",
               fontSize: "14px",
-              fontWeight: "600",
+              fontWeight: "700",
               cursor: loading ? "not-allowed" : "pointer",
               opacity: loading ? 0.7 : 1,
               fontFamily: "inherit",
+              letterSpacing: "0.3px",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+              transition: "all 0.2s",
             }}
           >
-            {loading ? "Submitting..." : "Submit Ticket"}
+            {loading ? "Submitting..." : "Submit Support Ticket"}
           </button>
         </form>
       )}

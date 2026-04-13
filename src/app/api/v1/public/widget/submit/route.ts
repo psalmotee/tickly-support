@@ -28,8 +28,17 @@ export async function POST(request: NextRequest) {
       customFieldValues,
     } = body;
 
+    console.log("[widget/submit] Received request:", {
+      websiteId,
+      name,
+      email,
+      phone,
+      subject,
+    });
+
     // Validate required fields
     if (!websiteId || !name || !email || !subject || !message) {
+      console.log("[widget/submit] Missing required fields");
       return NextResponse.json(
         {
           success: false,
@@ -42,6 +51,7 @@ export async function POST(request: NextRequest) {
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
+      console.log("[widget/submit] Invalid email format:", email);
       return NextResponse.json(
         {
           success: false,
@@ -52,8 +62,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate website exists
+    console.log("[widget/submit] Looking up website by token:", websiteId);
     const website = await getWebsiteByToken(websiteId);
+    console.log(
+      "[widget/submit] Website lookup result:",
+      website ? "found" : "not found",
+    );
     if (!website) {
+      console.log("[widget/submit] Website not found for token:", websiteId);
       return NextResponse.json(
         {
           success: false,
@@ -63,9 +79,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create widget ticket
+    // Create widget ticket (pass actual website ID, not token)
+    console.log("[widget/submit] Creating ticket for website:", website.id);
     const ticket = await createWidgetTicket({
-      websiteId,
+      websiteId: website.id,
       name: name.trim(),
       email: email.trim().toLowerCase(),
       phone: phone?.trim() || "",
@@ -74,7 +91,12 @@ export async function POST(request: NextRequest) {
       priority: priority || "medium",
     });
 
+    console.log(
+      "[widget/submit] Ticket creation result:",
+      ticket ? "success" : "failed",
+    );
     if (!ticket) {
+      console.log("[widget/submit] Failed to create ticket");
       return NextResponse.json(
         {
           success: false,
@@ -87,6 +109,7 @@ export async function POST(request: NextRequest) {
     // Save custom field values if provided
     if (customFieldValues && Object.keys(customFieldValues).length > 0) {
       try {
+        console.log("[widget/submit] Saving custom field values");
         // Filter out empty values
         const filteredValues: Record<string, string> = {};
         for (const [fieldId, value] of Object.entries(customFieldValues)) {
@@ -97,18 +120,24 @@ export async function POST(request: NextRequest) {
 
         if (Object.keys(filteredValues).length > 0) {
           await saveTicketCustomFieldValues(ticket.id, filteredValues);
+          console.log("[widget/submit] Custom field values saved");
         }
       } catch (fieldError) {
-        console.error("Error saving custom field values:", fieldError);
+        console.error(
+          "[widget/submit] Error saving custom field values:",
+          fieldError,
+        );
         // Don't fail the request if field save fails - ticket was created
       }
     }
 
     // Send emails in background (don't wait for response)
     try {
+      console.log("[widget/submit] Fetching organization for emails");
       // Get organization info
       const org = await getOrganizationById(website.organization_id);
       if (org) {
+        console.log("[widget/submit] Sending confirmation email to:", email);
         // Send confirmation email to customer
         await sendWidgetTicketConfirmation(
           { name: name.trim(), email: email.trim().toLowerCase() },
@@ -120,6 +149,7 @@ export async function POST(request: NextRequest) {
           { name: org.name },
         );
 
+        console.log("[widget/submit] Sending admin notifications");
         // Send notification to admins
         const members = await getOrganizationMembers(website.organization_id);
         const adminMembers = members.filter(
@@ -137,12 +167,17 @@ export async function POST(request: NextRequest) {
             );
           }
         }
+        console.log("[widget/submit] Emails sent successfully");
       }
     } catch (emailError) {
-      console.error("Error sending notification emails:", emailError);
+      console.error(
+        "[widget/submit] Error sending notification emails:",
+        emailError,
+      );
       // Don't fail the request if emails fail - ticket was created successfully
     }
 
+    console.log("[widget/submit] Request completed successfully");
     return NextResponse.json(
       {
         success: true,
@@ -155,11 +190,17 @@ export async function POST(request: NextRequest) {
       { status: 201 },
     );
   } catch (error) {
-    console.error("Widget submission error:", error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    console.error("[widget/submit] Widget submission error:", {
+      message: errorMessage,
+      stack: errorStack,
+    });
     return NextResponse.json(
       {
         success: false,
         message: "Internal server error",
+        details: errorMessage,
       },
       { status: 500 },
     );

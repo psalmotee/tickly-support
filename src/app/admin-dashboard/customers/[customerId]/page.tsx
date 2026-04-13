@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import { toast } from "react-toastify";
 
 interface Ticket {
   id: string;
@@ -103,9 +104,10 @@ export default function CustomerDetailPage() {
       const data = await response.json();
       setNotes(data.notes || []);
       setNewNote("");
+      toast.success("✓ Note added successfully");
     } catch (err) {
       console.error("Error adding note:", err);
-      setError("Failed to add note");
+      toast.error("Failed to add note");
     } finally {
       setAddingNote(false);
     }
@@ -142,9 +144,10 @@ export default function CustomerDetailPage() {
 
       setTags([...tags, newTag.trim().toLowerCase()]);
       setNewTag("");
+      toast.success(`✓ Tag "${newTag.trim()}" added`);
     } catch (err) {
       console.error("Error adding tag:", err);
-      setError("Failed to add tag");
+      toast.error("Failed to add tag");
     } finally {
       setAddingTag(false);
     }
@@ -170,9 +173,10 @@ export default function CustomerDetailPage() {
       if (!response.ok) throw new Error("Failed to remove tag");
 
       setTags(tags.filter((t) => t !== tagToRemove));
+      toast.success(`✓ Tag "${tagToRemove}" removed`);
     } catch (err) {
       console.error("Error removing tag:", err);
-      setError("Failed to remove tag");
+      toast.error("Failed to remove tag");
     } finally {
       setAddingTag(false);
     }
@@ -195,19 +199,27 @@ export default function CustomerDetailPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div
+      className="min-h-screen bg-background"
+      style={{
+        fontFamily:
+          "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif",
+      }}
+    >
       <div className="border-b border-border bg-card">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <Link
             href={`/admin-dashboard/customers`}
-            className="text-sm text-blue-600 hover:underline mb-4 inline-block"
+            className="text-sm font-medium text-primary hover:opacity-80 transition-opacity mb-4 inline-flex items-center gap-1"
           >
             ← Back to Customers
           </Link>
-          <h1 className="text-3xl font-bold text-foreground">
+          <h1 className="text-4xl font-bold text-foreground mt-4">
             {customer.full_name}
           </h1>
-          <p className="text-muted-foreground mt-2">{customer.email}</p>
+          <p className="text-muted-foreground mt-3 text-base">
+            {customer.email}
+          </p>
         </div>
       </div>
 
@@ -241,7 +253,7 @@ export default function CustomerDetailPage() {
                   <dd className="text-sm text-foreground mt-1">
                     <a
                       href={`mailto:${customer.email}`}
-                      className="text-blue-600 hover:underline"
+                      className="text-primary hover:opacity-80 transition-opacity font-medium"
                     >
                       {customer.email}
                     </a>
@@ -304,13 +316,13 @@ export default function CustomerDetailPage() {
                     {tags.map((tag) => (
                       <div
                         key={tag}
-                        className="flex items-center gap-2 px-3 py-1 rounded-full bg-blue-100 text-blue-800 text-sm"
+                        className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-50 text-blue-700 text-sm font-medium border border-blue-200 hover:bg-blue-100 transition-colors"
                       >
                         <span>{tag}</span>
                         <button
                           onClick={() => handleRemoveTag(tag)}
                           disabled={addingTag}
-                          className="ml-1 hover:text-blue-600 disabled:opacity-50"
+                          className="ml-1 hover:text-blue-900 disabled:opacity-50 transition-colors font-bold"
                           title="Remove tag"
                         >
                           ×
@@ -334,12 +346,12 @@ export default function CustomerDetailPage() {
                   }}
                   placeholder="Add new tag (e.g., vip, priority)"
                   disabled={addingTag}
-                  className="flex-1 px-3 py-2 rounded-lg border border-border bg-background text-foreground text-sm placeholder-muted-foreground disabled:opacity-50"
+                  className="flex-1 px-3 py-2 rounded-lg border border-border bg-background text-foreground text-sm placeholder-muted-foreground disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-primary/50"
                 />
                 <button
                   onClick={handleAddTag}
                   disabled={addingTag || !newTag.trim()}
-                  className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+                  className="px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
                 >
                   {addingTag ? "Adding..." : "Add"}
                 </button>
@@ -365,11 +377,11 @@ export default function CustomerDetailPage() {
                     <Link
                       key={ticket.id}
                       href={`/admin-dashboard/tickets-list/${ticket.id}`}
-                      className="p-4 rounded-lg border border-border hover:border-blue-400 transition block"
+                      className="p-4 rounded-lg border border-border hover:border-primary/50 hover:bg-card/80 transition-all block group"
                     >
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
-                          <p className="font-medium text-foreground">
+                          <p className="font-semibold text-foreground group-hover:text-primary transition-colors">
                             {ticket.title}
                           </p>
                           <p className="text-xs text-muted-foreground mt-1">
@@ -378,26 +390,33 @@ export default function CustomerDetailPage() {
                         </div>
                         <div className="flex gap-2">
                           <span
-                            className={`px-2 py-1 rounded text-xs font-medium ${
+                            className={`px-3 py-1 rounded-full text-xs font-semibold ${
                               ticket.status === "open"
-                                ? "bg-blue-50 text-blue-700"
-                                : ticket.status === "resolved"
-                                  ? "bg-green-50 text-green-700"
-                                  : "bg-gray-50 text-gray-700"
+                                ? "bg-amber-50 text-amber-700 border border-amber-200"
+                                : ticket.status === "in_progress"
+                                  ? "bg-blue-50 text-blue-700 border border-blue-200"
+                                  : ticket.status === "resolved"
+                                    ? "bg-green-50 text-green-700 border border-green-200"
+                                    : "bg-gray-50 text-gray-700 border border-gray-200"
                             }`}
                           >
-                            {ticket.status}
+                            {ticket.status
+                              .replace("_", " ")
+                              .charAt(0)
+                              .toUpperCase() +
+                              ticket.status.replace("_", " ").slice(1)}
                           </span>
                           <span
-                            className={`px-2 py-1 rounded text-xs font-medium ${
+                            className={`px-3 py-1 rounded-full text-xs font-semibold ${
                               ticket.priority === "high"
-                                ? "bg-red-50 text-red-700"
+                                ? "bg-red-50 text-red-700 border border-red-200"
                                 : ticket.priority === "medium"
-                                  ? "bg-yellow-50 text-yellow-700"
-                                  : "bg-green-50 text-green-700"
+                                  ? "bg-yellow-50 text-yellow-700 border border-yellow-200"
+                                  : "bg-green-50 text-green-700 border border-green-200"
                             }`}
                           >
-                            {ticket.priority}
+                            {ticket.priority.charAt(0).toUpperCase() +
+                              ticket.priority.slice(1)}
                           </span>
                         </div>
                       </div>
@@ -421,12 +440,12 @@ export default function CustomerDetailPage() {
                     onChange={(e) => setNewNote(e.target.value)}
                     placeholder="Add a note about this customer..."
                     rows={3}
-                    className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-border rounded-lg text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none bg-background"
                   />
                   <button
                     onClick={handleAddNote}
                     disabled={addingNote || !newNote.trim()}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50 transition"
+                    className="px-4 py-2 bg-primary text-white rounded-lg text-sm hover:opacity-90 disabled:opacity-50 transition-opacity font-medium"
                   >
                     {addingNote ? "Adding..." : "Add Note"}
                   </button>
