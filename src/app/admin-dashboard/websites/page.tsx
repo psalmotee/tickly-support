@@ -332,12 +332,6 @@ export default function WebsitesManagementPage() {
                   </button>
                 </div>
 
-                {website.description && (
-                  <p className="text-sm text-muted-foreground mb-4">
-                    {website.description}
-                  </p>
-                )}
-
                 <div className="space-y-3">
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-1">

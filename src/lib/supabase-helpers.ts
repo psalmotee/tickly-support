@@ -9,6 +9,7 @@
 
 import { randomUUID } from "crypto";
 import { supabase, supabaseAdmin } from "./supabase-client";
+import { isTicketDeletedByAdmin } from "./ticket-soft-delete";
 
 // ====== USERS ======
 
@@ -1387,14 +1388,14 @@ export async function addTagToCustomer(
 ): Promise<boolean> {
   try {
     // Get current tags
-    const query = supabaseAdmin
+    let query = supabaseAdmin
       .from("customers")
       .select("tags, organization_id")
       .eq("id", customerId);
 
     // If organization ID is provided, validate it
     if (organizationId) {
-      query.eq("organization_id", organizationId);
+      query = query.eq("organization_id", organizationId);
     }
 
     const { data: customer, error: fetchError } = await query.single();
@@ -1412,15 +1413,26 @@ export async function addTagToCustomer(
 
     const newTags = [...currentTags, normalizedTag];
 
-    const { error: updateError } = await supabaseAdmin
+    let updateQuery = supabaseAdmin
       .from("customers")
       .update({ tags: newTags })
       .eq("id", customerId);
 
+    if (organizationId) {
+      updateQuery = updateQuery.eq("organization_id", organizationId);
+    }
+
+    const { error: updateError } = await updateQuery;
+
     if (updateError) throw updateError;
     return true;
   } catch (error) {
-    console.error("Error adding tag to customer:", error);
+    console.error("Error adding tag to customer:", {
+      customerId,
+      tag,
+      organizationId,
+      error: error instanceof Error ? error.message : String(error),
+    });
     return false;
   }
 }
@@ -1431,14 +1443,14 @@ export async function removeTagFromCustomer(
   organizationId?: string,
 ): Promise<boolean> {
   try {
-    const query = supabaseAdmin
+    let query = supabaseAdmin
       .from("customers")
       .select("tags, organization_id")
       .eq("id", customerId);
 
     // If organization ID is provided, validate it
     if (organizationId) {
-      query.eq("organization_id", organizationId);
+      query = query.eq("organization_id", organizationId);
     }
 
     const { data: customer, error: fetchError } = await query.single();
@@ -1450,15 +1462,26 @@ export async function removeTagFromCustomer(
     const normalizedTag = tag.toLowerCase().trim();
     const newTags = currentTags.filter((t) => t !== normalizedTag);
 
-    const { error: updateError } = await supabaseAdmin
+    let updateQuery = supabaseAdmin
       .from("customers")
       .update({ tags: newTags })
       .eq("id", customerId);
 
+    if (organizationId) {
+      updateQuery = updateQuery.eq("organization_id", organizationId);
+    }
+
+    const { error: updateError } = await updateQuery;
+
     if (updateError) throw updateError;
     return true;
   } catch (error) {
-    console.error("Error removing tag from customer:", error);
+    console.error("Error removing tag from customer:", {
+      customerId,
+      tag,
+      organizationId,
+      error: error instanceof Error ? error.message : String(error),
+    });
     return false;
   }
 }
@@ -1590,7 +1613,10 @@ export async function getDashboardStats(
 
     if (error) throw error;
 
-    const tickets = (allTickets || []) as any[];
+    // Filter out soft-deleted tickets
+    const tickets = (allTickets || []).filter(
+      (t) => !isTicketDeletedByAdmin(t.internal_notes),
+    ) as any[];
     const totalTickets = tickets.length;
     const openTickets = tickets.filter(
       (t) => t.status === "open" || t.status === "in_progress",
@@ -1692,7 +1718,7 @@ export async function getTicketsByStatus(
   try {
     let query = supabase
       .from("support_tickets")
-      .select("status")
+      .select("status, internal_notes")
       .eq("organization_id", organizationId);
 
     if (websiteId) {
@@ -1710,7 +1736,13 @@ export async function getTicketsByStatus(
       closed: 0,
     };
 
+    // Filter out soft-deleted tickets and count by status
     (tickets || []).forEach((ticket: any) => {
+      // Skip soft-deleted tickets
+      if (isTicketDeletedByAdmin(ticket.internal_notes)) {
+        return;
+      }
+
       switch (ticket.status) {
         case "open":
           statusCounts.open++;
