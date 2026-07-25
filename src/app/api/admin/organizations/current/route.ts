@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRequestSessionUser } from "@/lib/server-session";
-import {
-  getOrganizationMemberships,
-  getOrganizationById,
-} from "@/lib/supabase-helpers";
+import { getOrganizationById } from "@/lib/supabase-helpers";
 import { supabaseAdmin } from "@/lib/supabase-client";
 
 /**
