@@ -70,23 +70,10 @@ export async function POST(
     const { action, tag, tags } = body;
 
     if (action === "add_tag") {
-      if (!tag || !tag.trim()) {
-        return NextResponse.json(
-          { success: false, message: "Tag cannot be empty" },
-          { status: 400 },
-        );
-      }
-
       const success = await addTagToCustomer(customerId, tag, id);
       if (!success) {
-        console.error(
-          `Failed to add tag "${tag}" to customer ${customerId} in org ${id}`,
-        );
         return NextResponse.json(
-          {
-            success: false,
-            message: "Failed to add tag - customer not found or invalid",
-          },
+          { success: false, message: "Failed to add tag" },
           { status: 400 },
         );
       }
