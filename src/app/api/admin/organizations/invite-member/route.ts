@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
     // Check if user already exists
     const { data: existingUser } = await supabaseAdmin
       .from("users")
-      .select("id")
+      .select("id, email")
       .eq("email", email.toLowerCase())
       .single();
 
