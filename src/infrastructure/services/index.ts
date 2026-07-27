@@ -1,7 +1,12 @@
 /**
  * Infrastructure Services
- * Business logic services that coordinate across features
- * These are gradually migrated from src/lib
+ * Cross-cutting concerns: Email, Auth, External APIs, etc.
  */
 
-// Services are exported on-demand as they are migrated
+// Services implement concrete functionality
+// Example: EmailService, AuthService, SupabaseService, etc.
+
+// Example structure:
+// export * from './email.service';
+// export * from './auth.service';
+// export * from './supabase.service';
