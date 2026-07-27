@@ -7,7 +7,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { signup, login } from "@/lib/auth-client";
-import { validateSignupForm } from "@/lib/form-validation";
+import { validateSignupForm } from "@/shared/utils/form-validation";
 import { FormError } from "./form-error";
 import { Eye, EyeOff } from "lucide-react";
 import { useAuth } from "./auth-provider";

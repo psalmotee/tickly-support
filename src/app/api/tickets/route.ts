@@ -9,7 +9,7 @@ import {
 } from "@/lib/supabase-helpers";
 import { getRequestSessionUser } from "@/lib/server-session";
 import { validateTicketCreateInput } from "@/lib/ticket-rules";
-import { sortByCreatedAtDesc } from "@/lib/sort-utils";
+import { sortByCreatedAtDesc } from "@/shared/utils/sort-utils";
 
 function mapTicketRecord(record: TicketRecord) {
   return {

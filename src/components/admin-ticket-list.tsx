@@ -3,7 +3,7 @@
 import { startTransition, useCallback, useEffect, useState } from "react";
 import NextLink from "next/link";
 import { type Ticket } from "@/lib/ticket-local-store";
-import { sortByCreatedAtDesc } from "@/lib/sort-utils";
+import { sortByCreatedAtDesc } from "@/shared/utils/sort-utils";
 import { Modal } from "./modal";
 import { DeleteConfirmationModal } from "./delete-confirmation-modal";
 import { Trash2, ChevronDown, CheckCircle2, AlertTriangle } from "lucide-react";

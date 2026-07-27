@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { type Ticket } from "@/lib/ticket-local-store";
-import { sortByCreatedAtDesc } from "@/lib/sort-utils";
+import { sortByCreatedAtDesc } from "@/shared/utils/sort-utils";
 import { TicketCard } from "./ticket-card";
 import { Modal } from "./modal";
 import { EditTicketForm } from "./edit-ticket-form";

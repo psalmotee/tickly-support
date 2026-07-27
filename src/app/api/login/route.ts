@@ -1,8 +1,8 @@
 // used
 
 import { NextResponse } from "next/server";
-import { verifyPassword } from "@/lib/password-utils";
-import { validateEmail, validatePassword } from "@/lib/form-validation";
+import { verifyPassword } from "@/shared/utils/password-utils";
+import { validateEmail, validatePassword } from "@/shared/utils/form-validation";
 import { supabaseAdmin } from "@/lib/supabase-client";
 
 function normalizeRole(role?: string): "admin" | "user" {

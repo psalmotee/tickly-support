@@ -3,5 +3,9 @@
  * Pure functions for common operations across features
  */
 
-// Utilities are exported on-demand as they are created
-// This prevents circular dependencies
+// Core utilities
+export * from './form-validation';
+export * from './password-utils';
+export * from './sort-utils';
+export * from './ticket-id';
+export * from './ticket-number';

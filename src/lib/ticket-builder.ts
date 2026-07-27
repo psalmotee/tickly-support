@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import type { TicketPriority } from "./ticket-local-store";
 import { VALID_TICKET_PRIORITIES } from "./ticket-rules";
-import { generateTicketId } from "./ticket-id";
+import { generateTicketId } from "@/shared/utils/ticket-id";
 
 export interface InsertTicketPayload {
   title: string;
