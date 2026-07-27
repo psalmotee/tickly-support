@@ -1,208 +1,411 @@
-# Phase 1.1 Completion Report
+# Phase 1.1 Architecture Alignment (Final Approved Architecture)
 
-**Status:** ✅ COMPLETE  
-**Date:** July 27, 2026  
-**Changes:** Architecture alignment with approved documentation
+## Architecture Status
 
----
+**Status:** ✅ APPROVED
 
-## Summary
+Following the Phase 1 implementation review, several architectural refinements were applied to fully align Tickly with the approved engineering documentation.
 
-Phase 1.1 corrected and refined the Phase 1 architecture to align precisely with approved documentation. All feature names now follow the plural convention, and the infrastructure and shared layers were expanded to support the full v2 architecture.
+The objective of these refinements is to ensure the project remains scalable, maintainable, and suitable for long-term SaaS growth without requiring future structural rewrites.
 
-**Key Result:** ✅ TypeScript compilation successful, zero breaking changes
+No application functionality was changed during this phase.
 
 ---
 
-## Changes Made
+# Core Architectural Principles
 
-### Feature Naming Corrections
+Tickly follows a layered architecture with clear separation between:
 
-All feature modules renamed to plural form for consistency:
+- Business Domains
+- Shared Libraries
+- Infrastructure
+- Services
+- Repositories
+- Application Routing
 
-| Old Name | New Name | Purpose |
-|----------|----------|---------|
-| `support` | `tickets` | Ticket management system |
-| `customer` | `customers` | Customer portal & management |
-| `organization` | `organizations` | Organization settings & management |
-| `notification` | `notifications` | Email, webhooks, notifications |
+Each layer has a single responsibility and strict dependency boundaries.
 
-### Transport-Layer Cleanup
+```
+Application (Next.js App Router)
 
-Removed modules that represent app transport, not business capabilities:
+↓
 
-- ✅ **Removed `website`** — App Router pages only, not a feature module
-- ✅ **Removed `public-api`** — App Router `/api` routes only, not a feature module
+Feature Modules
 
-### Shared Components Migration
+↓
 
-- ✅ **Moved** `features/shared-components` → `shared/components`
-- ✅ **Preserved structure:** `modals/`, `forms/`, `layouts/`, `cards/`
-- ✅ **Reason:** UI components are shared utilities, not a business feature
+Service Layer
 
-### Shared Layer Expansion
+↓
 
-Created new directories to support Phase 2 code extraction:
+Repository Layer
 
-| Module | Purpose | Files |
-|--------|---------|-------|
-| `schemas/` | Zod validation schemas | `index.ts` |
-| `repositories/` | Repository pattern interfaces | `index.ts` |
-| `services/` | Service base classes & utilities | `index.ts` |
-| `types/domain.ts` | Core domain types | `domain.ts` |
-| `validation/validators.ts` | Custom validators | `validators.ts` |
-| `components/` | Reusable UI components | Pre-existing subdirs |
+↓
 
-### Infrastructure Layer Expansion
+Infrastructure Layer
 
-Created new directories for data access and service patterns:
+↓
 
-| Module | Purpose | Files |
-|--------|---------|-------|
-| `repositories/` | Data access abstraction layer | `index.ts` |
-| `services/` | Service implementation patterns | `index.ts` (updated) |
+External Services / Database
+```
+
+Business logic always flows downward through these layers.
 
 ---
 
-## Architecture Overview
-
-### Features Directory (8 modules)
+# Approved Project Structure
 
 ```
-/src/features/
-├── admin/               Admin dashboard & management
-├── analytics/           Stats & reporting
-├── auth/                Authentication & authorization
-├── customers/           Customer portal
-├── notifications/       Email & webhooks
-├── organizations/       Organization settings
-├── tickets/             Support tickets & workflows
-└── index.ts             Barrel export
-```
+src/
 
-### Shared Layer
-
-```
-/src/shared/
-├── components/          Reusable UI components
-│   ├── cards/
-│   ├── forms/
+├── app/                        # Next.js App Router only
+│
+├── features/                   # Business domains
+│   ├── auth/
+│   ├── tickets/
+│   ├── customers/
+│   ├── organizations/
+│   ├── users/
+│   ├── widget/
+│   ├── analytics/
+│   └── notifications/
+│
+├── shared/                     # Reusable application assets
+│   ├── components/
+│   ├── hooks/
+│   ├── providers/
 │   ├── layouts/
-│   └── modals/
-├── constants/           Application constants
-├── repositories/        Repository interfaces
-├── schemas/             Zod validation schemas
-├── services/            Service base classes
-├── types/               Type definitions
-│   └── domain.ts        Core domain types
-├── utils/               Utility functions
-├── validation/          Validation utilities
-│   └── validators.ts    Custom validators
-└── index.ts             Barrel export
+│   ├── icons/
+│   ├── utils/
+│   ├── validation/
+│   ├── schemas/
+│   ├── constants/
+│   └── types/
+│
+├── services/                   # Business logic layer
+│   ├── ticket.service.ts
+│   ├── customer.service.ts
+│   ├── organization.service.ts
+│   ├── notification.service.ts
+│   ├── analytics.service.ts
+│   └── widget.service.ts
+│
+├── repositories/               # Data access layer
+│   ├── ticket.repository.ts
+│   ├── customer.repository.ts
+│   ├── organization.repository.ts
+│   ├── user.repository.ts
+│   └── auth.repository.ts
+│
+├── infrastructure/             # External systems
+│   ├── auth/
+│   ├── database/
+│   ├── email/
+│   ├── storage/
+│   ├── logging/
+│   ├── cache/
+│   ├── queue/
+│   ├── monitoring/
+│   └── search/
+│
+├── config/                     # Centralized configuration
+│
+├── types/                      # Global application types
+│
+└── middleware/                 # Request middleware
 ```
 
-### Infrastructure Layer
+---
+
+# Layer Responsibilities
+
+## App Layer
+
+The App Router is responsible only for:
+
+- routing
+- layouts
+- page rendering
+- API endpoints
+- middleware integration
+
+Business logic must never be implemented directly inside App Router pages or API routes.
+
+---
+
+## Feature Layer
+
+Features represent business capabilities.
+
+Approved business domains are:
+
+- Authentication
+- Tickets
+- Customers
+- Organizations
+- Users
+- Widget
+- Notifications
+- Analytics
+
+A feature owns:
+
+- UI
+- hooks
+- local utilities
+- feature-specific types
+- feature-specific components
+
+A feature never communicates directly with the database.
+
+---
+
+## Shared Layer
+
+The Shared layer contains reusable assets that can be used by multiple features.
+
+Examples include:
+
+- reusable UI components
+- custom hooks
+- utility functions
+- constants
+- validation helpers
+- schemas
+- shared types
+- layouts
+- providers
+- icons
+
+The Shared layer contains **no business logic**.
+
+---
+
+## Service Layer
+
+The Service layer contains all business rules.
+
+Examples include:
+
+- ticket assignment
+- SLA calculations
+- customer onboarding
+- organization creation
+- notification workflows
+- widget configuration
+
+Services coordinate repositories and infrastructure.
+
+Services never perform SQL queries directly.
+
+---
+
+## Repository Layer
+
+Repositories are responsible for all data access.
+
+Responsibilities include:
+
+- Supabase queries
+- database transactions
+- persistence
+- mapping database records
+
+Repositories contain no business decisions.
+
+Services consume repositories.
+
+---
+
+## Infrastructure Layer
+
+Infrastructure contains integrations with external systems.
+
+Examples:
+
+- Supabase
+- Resend
+- Redis
+- Object Storage
+- Search providers
+- Monitoring
+- Logging
+- Authentication providers
+
+Infrastructure contains adapters only.
+
+It never contains business logic.
+
+---
+
+# Dependency Rules
+
+The project follows one-way dependencies.
 
 ```
-/src/infrastructure/
-├── config/              Configuration
-├── database/            Database clients
-├── external/            Third-party services
-├── repositories/        Data access abstraction
-├── services/            Service implementations
-└── index.ts             Barrel export
+App
+
+↓
+
+Features
+
+↓
+
+Services
+
+↓
+
+Repositories
+
+↓
+
+Infrastructure
 ```
 
----
+Lower layers never import higher layers.
 
-## Metrics
+Examples:
 
-| Metric | Value |
-|--------|-------|
-| Folders renamed | 4 |
-| Folders removed | 2 |
-| Folders moved | 1 |
-| New directories created | 7 |
-| Placeholder files created | 6 |
-| Build status | ✅ TypeScript successful |
-| Breaking changes | 0 |
-| Regressions | 0 |
+Repository → Service ❌
 
----
+Infrastructure → Feature ❌
 
-## Key Architecture Principles
+Shared → Feature ❌
 
-### 1. Feature-Based Organization
-- **Features represent business capabilities**, not technical layers
-- `tickets`, `customers`, `organizations`, `notifications` = business concepts
-- NOT `api`, `website`, `public-api` = technical transport concerns
+Service → Repository ✅
 
-### 2. Shared Layer Maturity
-- **Schemas** — Centralized validation rules
-- **Repositories** — Data access abstraction interfaces
-- **Services** — Base classes for cross-cutting concerns
-- **Components** — Reusable UI pieces
-- **Types** — Shared domain types
-- **Validators** — Custom validation utilities
+Feature → Service ✅
 
-### 3. Infrastructure Separation
-- **Services** — Email, Auth, External APIs
-- **Repositories** — Implementation of data access patterns
-- **Database** — Supabase client & connection
-- **Config** — Environment & app configuration
-- **External** — Third-party integrations
-
-### 4. Clear Boundaries
-- Features own their business logic
-- Infrastructure owns technical concerns
-- Shared owns reusable utilities
-- No circular dependencies
+App → Feature ✅
 
 ---
 
-## What's Next (Phase 2)
+# Architectural Decisions
 
-Phase 2 will extract and organize existing code:
+The following architectural decisions are now mandatory throughout the project:
 
-1. **Extract Services** → `infrastructure/services/`
-   - Email service
-   - Auth service
-   - Supabase service
-
-2. **Extract Repositories** → `infrastructure/repositories/`
-   - User repository
-   - Organization repository
-   - Ticket repository
-
-3. **Extract Schemas** → `shared/schemas/`
-   - User schema
-   - Organization schema
-   - Ticket schema
-
-4. **Extract Types** → `shared/types/domain.ts`
-   - User, Organization, Ticket types
-   - Role & permission types
-
-5. **Extract Validators** → `shared/validation/validators.ts`
-   - Email validator
-   - ID validators
-   - Custom Zod refinements
-
-6. **Migrate Components** → `shared/components/`
-   - Modal components
-   - Form components
-   - Layout components
-   - Card components
+- Features represent business domains.
+- Shared contains only reusable application assets.
+- Services contain business logic.
+- Repositories contain data access.
+- Infrastructure contains external integrations.
+- App Router remains thin.
+- API routes delegate work to services.
+- Components remain focused on presentation and interaction.
+- Database access never occurs inside UI components.
 
 ---
 
-## Verification
+# Architecture Improvements
 
-✅ TypeScript compilation successful  
-✅ Import path aliases working  
-✅ Folder structure aligned with documentation  
-✅ Zero breaking changes  
-✅ All existing code preserved  
-✅ Git commit with full documentation  
+The following refinements were applied during Phase 1.1:
 
-**Ready for Phase 2: Code Migration**
+## Feature Naming
+
+Business domains now follow plural naming conventions.
+
+Examples:
+
+- tickets
+- customers
+- organizations
+- notifications
+
+instead of transport-oriented names.
+
+---
+
+## Shared Components
+
+Shared UI components have been moved into the Shared layer.
+
+This prevents duplication across features.
+
+---
+
+## Removal of Transport Features
+
+Modules representing transport or application routing have been removed from the Feature layer.
+
+Examples:
+
+- website
+- public-api
+
+These remain responsibilities of the Next.js App Router.
+
+---
+
+## Infrastructure Simplification
+
+Infrastructure has been limited to technical integrations only.
+
+Business services have been removed from Infrastructure.
+
+---
+
+## Service Separation
+
+Business services now belong to the dedicated Service layer.
+
+Infrastructure no longer owns business behavior.
+
+---
+
+## Repository Separation
+
+Database operations are isolated within repositories.
+
+This prepares the project for future support of multiple database providers if required.
+
+---
+
+# Expected Benefits
+
+This architecture provides:
+
+- Clear ownership of business domains
+- Easier onboarding of engineers
+- Better testability
+- Reduced coupling
+- Improved scalability
+- Easier future migrations
+- Consistent engineering practices
+- Cleaner dependency management
+
+---
+
+# Phase 1.1 Exit Criteria
+
+The architecture is considered complete when:
+
+- Folder structure matches approved documentation.
+- Layer responsibilities are clearly defined.
+- Dependency boundaries are documented.
+- No business logic exists in infrastructure.
+- No database access exists outside repositories.
+- Shared contains only reusable assets.
+- Existing functionality remains unchanged.
+- TypeScript compilation succeeds.
+- No regressions are introduced.
+
+---
+
+# Phase 2 Readiness
+
+The architecture foundation is now complete.
+
+Phase 2 will focus exclusively on migrating existing code into the approved architecture without changing application behavior.
+
+The migration sequence will be:
+
+1. Shared Layer Extraction
+2. Infrastructure Extraction
+3. Repository Migration
+4. Service Layer Migration
+5. Feature Module Migration
+6. API Route Simplification
+7. Component Refactoring
+8. Final Cleanup & Validation
+
+No new features will be introduced until the architectural migration is complete.
