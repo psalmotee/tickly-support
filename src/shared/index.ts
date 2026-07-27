@@ -1,10 +1,14 @@
 /**
  * Shared Barrel Export
- * Central export point for shared utilities, types, constants, and validation
+ * Central export point for shared utilities, types, constants, schemas, validators, repositories, and services
  */
 
-// Export statements will be added as modules are populated
+// Core exports will be added as modules are populated
 // export * from './utils';
 // export * from './types';
 // export * from './constants';
 // export * from './validation';
+// export * from './schemas';
+// export * from './repositories';
+// export * from './services';
+// export * from './components';
