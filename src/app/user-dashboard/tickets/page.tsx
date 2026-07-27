@@ -4,7 +4,7 @@ import { useState } from "react";
 import { UserDashboardHeader } from "@/components/user-dashboard-header";
 import { TicketList } from "@/components/ticket-list";
 import { CreateTicketForm } from "@/components/create-ticket-form";
-import { Modal } from "@/components/modal";
+import { Modal } from "@/shared/components/modals/modal";
 import { Plus } from "lucide-react";
 import Link from "next/link";
 import type { Ticket } from "@/lib/ticket-local-store";

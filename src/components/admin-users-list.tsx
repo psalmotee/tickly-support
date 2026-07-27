@@ -13,7 +13,7 @@ import {
   ArrowUp,
   ArrowDown,
 } from "lucide-react";
-import { Modal } from "./modal";
+import { Modal } from "@/shared/components/modals/modal";
 import { PromoteDemoteModal } from "./promote-demote-modal";
 import { handleAdminApiAuthRedirect } from "@/lib/admin-api-client";
 

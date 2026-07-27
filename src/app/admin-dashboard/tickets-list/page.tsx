@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@/components/auth-provider";
+import { useAuth } from "@/shared/providers/auth-provider";
 import { isAdmin } from "@/lib/access-control";
 import { AdminDashboardHeader } from "@/components/admin-dashboard-header";
 import { AdminTicketList } from "@/components/admin-ticket-list";

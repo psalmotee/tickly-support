@@ -5,14 +5,14 @@ import {
   validateEmail,
   validatePassword,
   validateName,
-} from "@/lib/form-validation";
+} from "@/shared/utils/form-validation";
 import {
   getUserByEmail,
   createOrganization,
   createOrganizationMember,
   createUser,
 } from "@/lib/supabase-helpers";
-import { hashPassword } from "@/lib/password-utils";
+import { hashPassword } from "@/shared/utils/password-utils";
 import { supabaseAdmin } from "@/lib/supabase-client";
 
 export async function POST(req: Request) {

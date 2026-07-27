@@ -2,13 +2,13 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { type Ticket } from "@/lib/ticket-local-store";
-import { sortByCreatedAtDesc } from "@/lib/sort-utils";
+import { sortByCreatedAtDesc } from "@/shared/utils/sort-utils";
 import { TicketCard } from "./ticket-card";
-import { Modal } from "./modal";
+import { Modal } from "@/shared/components/modals/modal";
 import { EditTicketForm } from "./edit-ticket-form";
-import { DeleteConfirmationModal } from "./delete-confirmation-modal";
+import { DeleteConfirmationModal } from "@/shared/components/modals/delete-confirmation-modal";
 import { toast } from "react-toastify";
-import { useAuth } from "./auth-provider";
+import { useAuth } from "@/shared/hooks/useAuth";
 import { AlertTriangle, Edit } from "lucide-react";
 
 interface TicketListProps {

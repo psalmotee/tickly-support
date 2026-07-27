@@ -3,10 +3,10 @@
 
 import type React from "react";
 import { useState, useEffect } from "react";
-import { useAuth } from "./auth-provider";
-import { FormError } from "./form-error";
-import { Modal } from "./modal";
-import { DeleteConfirmationModal } from "./delete-confirmation-modal";
+import { useAuth } from "@/shared/hooks/useAuth";
+import { FormError } from "@/shared/components/form-error";
+import { Modal } from "@/shared/components/modals/modal";
+import { DeleteConfirmationModal } from "@/shared/components/modals/delete-confirmation-modal";
 import { Trash2, UserPlus, Copy, Check } from "lucide-react";
 
 interface TeamMember {

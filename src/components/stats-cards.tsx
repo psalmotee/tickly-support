@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { type Ticket } from "@/lib/ticket-local-store";
 import { isTicketDeletedByAdmin } from "@/lib/ticket-soft-delete";
 
-import { useAuth } from "./auth-provider";
+import { useAuth } from "@/shared/hooks/useAuth";
 import { BarChart3, CheckCircle2, Clock, AlertCircle } from "lucide-react";
 
 const EMPTY_STATS = {

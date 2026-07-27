@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useAuth } from "@/components/auth-provider";
+import { useAuth } from "@/shared/providers/auth-provider";
 import { isAdmin } from "@/lib/access-control";
 import { AdminDashboardHeader } from "@/components/admin-dashboard-header";
 import { AdminUserList } from "@/components/admin-users-list";

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRequestSessionUser } from "@/lib/server-session";
 import { supabaseAdmin } from "@/lib/supabase-client";
-import { hashPassword } from "@/lib/password-utils";
+import { hashPassword } from "@/shared/utils/password-utils";
 import { sendTeamMemberInvitation } from "@/lib/email-service";
 
 /**

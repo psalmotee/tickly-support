@@ -1,6 +1,6 @@
 import type React from "react";
 import type { Metadata } from "next";
-import { AuthProvider } from "@/components/auth-provider";
+import { AuthProvider } from "@/shared/providers/auth-provider";
 import "./globals.css";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
