@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/components/auth-provider";
-import { FormError } from "@/components/form-error";
+import { FormError } from "@/shared/components/form-error";
 
 interface InviteDetails {
   email: string;

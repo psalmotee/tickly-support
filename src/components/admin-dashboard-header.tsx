@@ -6,7 +6,7 @@ import { logout } from "@/lib/auth-client";
 import { LogOut, Menu, LayoutDashboard } from "lucide-react";
 import { useState } from "react";
 import Link from "next/link";
-import { useAuth } from "./auth-provider";
+import { useAuth } from "@/shared/hooks/useAuth";
 
 export function AdminDashboardHeader() {
   const router = useRouter();

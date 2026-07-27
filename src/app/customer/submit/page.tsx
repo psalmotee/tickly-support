@@ -4,7 +4,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { FormError } from "@/components/form-error";
+import { FormError } from "@/shared/components/form-error";
 
 export default function CustomerSubmitTicketPage() {
   const router = useRouter();

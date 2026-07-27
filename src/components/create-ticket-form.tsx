@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { toast } from "react-toastify";
 import { validateTicketForm } from "@/shared/utils/form-validation";
-import { useAuth } from "./auth-provider";
+import { useAuth } from "@/shared/hooks/useAuth";
 import type { Ticket } from "@/lib/ticket-local-store";
 
 interface CreateTicketFormProps {

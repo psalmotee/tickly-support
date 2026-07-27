@@ -3,7 +3,7 @@
 
 import type React from "react";
 import { useState, useEffect } from "react";
-import { useAuth } from "./auth-provider";
+import { useAuth } from "@/shared/hooks/useAuth";
 import { FormError } from "@/shared/components/form-error";
 import { Modal } from "@/shared/components/modals/modal";
 import { DeleteConfirmationModal } from "@/shared/components/modals/delete-confirmation-modal";

@@ -9,7 +9,7 @@ import { login } from "@/lib/auth-client";
 import { validateLoginForm } from "@/shared/utils/form-validation";
 import { FormError } from "@/shared/components/form-error";
 import { Eye, EyeOff } from "lucide-react";
-import { useAuth } from "./auth-provider";
+import { useAuth } from "@/shared/hooks/useAuth";
 
 export function LoginForm() {
   const router = useRouter();

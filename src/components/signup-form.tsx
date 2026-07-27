@@ -10,7 +10,7 @@ import { signup, login } from "@/lib/auth-client";
 import { validateSignupForm } from "@/shared/utils/form-validation";
 import { FormError } from "@/shared/components/form-error";
 import { Eye, EyeOff } from "lucide-react";
-import { useAuth } from "./auth-provider";
+import { useAuth } from "@/shared/hooks/useAuth";
 
 export function SignupForm() {
   const router = useRouter();

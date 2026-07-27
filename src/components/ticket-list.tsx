@@ -8,7 +8,7 @@ import { Modal } from "@/shared/components/modals/modal";
 import { EditTicketForm } from "./edit-ticket-form";
 import { DeleteConfirmationModal } from "@/shared/components/modals/delete-confirmation-modal";
 import { toast } from "react-toastify";
-import { useAuth } from "./auth-provider";
+import { useAuth } from "@/shared/hooks/useAuth";
 import { AlertTriangle, Edit } from "lucide-react";
 
 interface TicketListProps {
