@@ -4,7 +4,7 @@ import type React from "react";
 
 import { useState } from "react";
 import { type Ticket, type TicketStatus } from "@/lib/ticket-local-store";
-import { FormError } from "./form-error";
+import { FormError } from "@/shared/components/form-error";
 
 interface EditTicketFormProps {
   ticket: Ticket;

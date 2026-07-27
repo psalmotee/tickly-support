@@ -7,7 +7,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { login } from "@/lib/auth-client";
 import { validateLoginForm } from "@/shared/utils/form-validation";
-import { FormError } from "./form-error";
+import { FormError } from "@/shared/components/form-error";
 import { Eye, EyeOff } from "lucide-react";
 import { useAuth } from "./auth-provider";
 

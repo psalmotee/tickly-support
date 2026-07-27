@@ -3,4 +3,5 @@
  * Reusable modal components
  */
 
-// Modal exports on-demand
+export { Modal } from './modal';
+export { DeleteConfirmationModal } from './delete-confirmation-modal';
